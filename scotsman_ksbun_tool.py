@@ -8,7 +8,12 @@ Primary design:
 - Pi provides DHCP
 - Pi talks to KSBU-N using SNMPv1 + NAFEM Bulk File Transfer
 - Pi hosts command files over TFTP
-- HTTP is only used for sanity checking / fallback discovery
+- HTTP is used for sanity checking / fallback discovery
+
+Docs basis:
+- KSBU-N supports Ethernet, DHCP, browser access, USB, and NAFEM protocol.
+- Compliance form identifies SNMPv1 agent, TFTP client, DHCP client, UDP, IPv4.
+- Bulk File Transfer document defines writable functions and indexes.
 
 System packages on Raspberry Pi:
     sudo apt update
@@ -29,11 +34,6 @@ Examples:
     uv run scotsman_ksbun_tool.py --host 10.77.0.20 unlock-keypad
     uv run scotsman_ksbun_tool.py --host 10.77.0.20 set-flush-level Auto
     uv run scotsman_ksbun_tool.py --host 10.77.0.20 set-clean-interval 6
-
-Important:
-- The SNMP OIDs for the exact NAFEM Bulk File Transfer MIB must be filled in once
-  we have the actual NAFEM MIB text or discover it from snmpwalk.
-- This script already creates the correct command files and abstracts the indexes.
 """
 
 from __future__ import annotations
@@ -41,6 +41,7 @@ from __future__ import annotations
 import argparse
 import json
 import subprocess
+import tomllib
 from dataclasses import asdict, dataclass
 from datetime import datetime
 from pathlib import Path
@@ -52,9 +53,10 @@ from loguru import logger
 
 LOG_DIR = Path("logs")
 DATA_DIR = Path("data")
-TFTP_ROOT = Path("/srv/tftp")
+CONFIG_PATH = Path("config/ksbun_gateway.toml")
 
 DEFAULT_COMMUNITY = "public"
+DEFAULT_TFTP_ROOT = Path("/srv/tftp")
 
 # Known writable Bulk File Transfer indexes from Scotsman Smart Board doc.
 BULK_INDEX_BIN_LEVEL = 4
@@ -64,12 +66,43 @@ BULK_INDEX_FLUSH_LEVEL = 8
 BULK_INDEX_MACHINE_POWER = 9
 
 
-# TODO: Replace these placeholders after NAFEM MIB discovery.
-# The KSBU-N supports SNMPv1 and NAFEM Bulk File Transfer, but these exact OIDs
-# need the NAFEM MIB or a successful snmpwalk mapping.
-NAFEM_BULK_FILE_NAME_OID = "TODO"
-NAFEM_BULK_FILE_TRANSFER_TRIGGER_OID = "TODO"
-NAFEM_BULK_FILE_STATUS_OID = "TODO"
+DEFAULT_CONFIG_TEXT = """[network]
+default_community = "public"
+tftp_root = "/srv/tftp"
+
+[snmp.bulk_transfer]
+file_name_base_oid = ""
+transfer_trigger_base_oid = ""
+status_base_oid = ""
+
+[snmp.discovery]
+walk_root_oid = ".1"
+"""
+
+
+@dataclass
+class BulkTransferOids:
+    file_name_base_oid: str
+    transfer_trigger_base_oid: str
+    status_base_oid: str
+
+    @property
+    def is_complete(self) -> bool:
+        return all(
+            [
+                self.file_name_base_oid,
+                self.transfer_trigger_base_oid,
+                self.status_base_oid,
+            ]
+        )
+
+
+@dataclass
+class GatewayConfig:
+    default_community: str
+    tftp_root: Path
+    walk_root_oid: str
+    bulk_transfer_oids: BulkTransferOids
 
 
 @dataclass
@@ -93,9 +126,14 @@ def now() -> str:
     return datetime.now().isoformat(timespec="seconds")
 
 
-def configure_logging() -> None:
+def ensure_dirs() -> None:
     LOG_DIR.mkdir(exist_ok=True)
     DATA_DIR.mkdir(exist_ok=True)
+    CONFIG_PATH.parent.mkdir(exist_ok=True)
+
+
+def configure_logging() -> None:
+    ensure_dirs()
 
     logger.remove()
     logger.add(
@@ -105,6 +143,44 @@ def configure_logging() -> None:
         level="DEBUG",
     )
     logger.add(lambda message: print(message, end=""), level="INFO")
+
+
+def load_config(path: Path = CONFIG_PATH) -> GatewayConfig:
+    ensure_dirs()
+
+    if not path.exists():
+        path.write_text(DEFAULT_CONFIG_TEXT, encoding="utf-8")
+        logger.warning(f"Created default config file: {path}")
+
+    with path.open("rb") as file:
+        raw = tomllib.load(file)
+
+    return GatewayConfig(
+        default_community=raw.get("network", {}).get(
+            "default_community",
+            DEFAULT_COMMUNITY,
+        ),
+        tftp_root=Path(
+            raw.get("network", {}).get(
+                "tftp_root",
+                str(DEFAULT_TFTP_ROOT),
+            )
+        ),
+        walk_root_oid=raw.get("snmp", {})
+        .get("discovery", {})
+        .get("walk_root_oid", ".1"),
+        bulk_transfer_oids=BulkTransferOids(
+            file_name_base_oid=raw.get("snmp", {})
+            .get("bulk_transfer", {})
+            .get("file_name_base_oid", ""),
+            transfer_trigger_base_oid=raw.get("snmp", {})
+            .get("bulk_transfer", {})
+            .get("transfer_trigger_base_oid", ""),
+            status_base_oid=raw.get("snmp", {})
+            .get("bulk_transfer", {})
+            .get("status_base_oid", ""),
+        ),
+    )
 
 
 def save_result(result: ToolResult) -> None:
@@ -130,12 +206,13 @@ class ScotsmanKSBUN:
     def __init__(
         self,
         host: str,
-        community: str = DEFAULT_COMMUNITY,
-        tftp_root: Path = TFTP_ROOT,
+        config: GatewayConfig,
+        community: str | None = None,
     ) -> None:
         self.host = host
-        self.community = community
-        self.tftp_root = tftp_root
+        self.config = config
+        self.community = community or config.default_community
+        self.tftp_root = config.tftp_root
 
     def ping(self) -> bool:
         result = run_command(["ping", "-c", "1", "-W", "2", self.host], timeout=5)
@@ -157,7 +234,7 @@ class ScotsmanKSBUN:
             "status_code": response.status_code,
             "headers": dict(response.headers),
             "saved_to": str(html_path),
-            "preview": response.text[:300],
+            "preview": response.text[:500],
         }
 
     def snmp_get(self, oid: str) -> str:
@@ -218,7 +295,9 @@ class ScotsmanKSBUN:
 
         return result.stdout.strip()
 
-    def snmp_walk(self, oid: str = ".1") -> str:
+    def snmp_walk(self, oid: str | None = None) -> str:
+        root_oid = oid or self.config.walk_root_oid
+
         result = run_command(
             [
                 "snmpwalk",
@@ -227,13 +306,16 @@ class ScotsmanKSBUN:
                 "-c",
                 self.community,
                 self.host,
-                oid,
+                root_oid,
             ],
-            timeout=60,
+            timeout=90,
         )
 
         output_path = DATA_DIR / "ksbun_snmpwalk.txt"
-        output_path.write_text(result.stdout + "\n\nSTDERR:\n" + result.stderr, encoding="utf-8")
+        output_path.write_text(
+            result.stdout + "\n\nSTDERR:\n" + result.stderr,
+            encoding="utf-8",
+        )
 
         if result.returncode != 0:
             logger.warning(f"snmpwalk failed: {result.stderr.strip()}")
@@ -249,6 +331,48 @@ class ScotsmanKSBUN:
         logger.info(f"Created command file: {path}")
         return path
 
+    def verify_bulk_transfer_oids(self) -> dict[str, Any]:
+        oids = self.config.bulk_transfer_oids
+
+        if not oids.is_complete:
+            return {
+                "ok": False,
+                "reason": "Bulk transfer OIDs are missing from config.",
+                "config_file": str(CONFIG_PATH),
+                "needed": [
+                    "snmp.bulk_transfer.file_name_base_oid",
+                    "snmp.bulk_transfer.transfer_trigger_base_oid",
+                    "snmp.bulk_transfer.status_base_oid",
+                ],
+            }
+
+        checks = {}
+
+        for name, base_oid in {
+            "file_name_base_oid": oids.file_name_base_oid,
+            "transfer_trigger_base_oid": oids.transfer_trigger_base_oid,
+            "status_base_oid": oids.status_base_oid,
+        }.items():
+            test_oid = f"{base_oid}.{BULK_INDEX_MACHINE_POWER}"
+
+            try:
+                checks[name] = {
+                    "oid": test_oid,
+                    "ok": True,
+                    "value": self.snmp_get(test_oid),
+                }
+            except RuntimeError as exc:
+                checks[name] = {
+                    "oid": test_oid,
+                    "ok": False,
+                    "error": str(exc),
+                }
+
+        return {
+            "ok": all(item["ok"] for item in checks.values()),
+            "checks": checks,
+        }
+
     def bulk_transfer(self, command_file: CommandFile) -> ToolResult:
         """
         Stage a command file and trigger a NAFEM Bulk File Transfer.
@@ -258,58 +382,89 @@ class ScotsmanKSBUN:
         must be filled in from the NAFEM Bulk File Transfer MIB.
         """
         path = self.create_command_file(command_file)
+        oids = self.config.bulk_transfer_oids
 
-        if "TODO" in {
-            NAFEM_BULK_FILE_NAME_OID,
-            NAFEM_BULK_FILE_TRANSFER_TRIGGER_OID,
-            NAFEM_BULK_FILE_STATUS_OID,
-        }:
-            success = False
-            details = {
-                "message": "Command file created, but Bulk File Transfer OIDs are not configured yet.",
-                "file": str(path),
-                "bulk_index": command_file.index,
-                "next_step": "Run snmp-walk and map the NAFEM Bulk File Transfer MIB OIDs.",
-            }
-            logger.warning(details["message"])
-        else:
-            filename_oid = f"{NAFEM_BULK_FILE_NAME_OID}.{command_file.index}"
-            trigger_oid = f"{NAFEM_BULK_FILE_TRANSFER_TRIGGER_OID}.{command_file.index}"
-            status_oid = f"{NAFEM_BULK_FILE_STATUS_OID}.{command_file.index}"
+        if not oids.is_complete:
+            result = ToolResult(
+                timestamp=now(),
+                host=self.host,
+                action=command_file.action,
+                success=False,
+                details={
+                    "message": "Command file created, but Bulk File Transfer OIDs are not configured.",
+                    "file": str(path),
+                    "bulk_index": command_file.index,
+                    "config_file": str(CONFIG_PATH),
+                    "needed": [
+                        "snmp.bulk_transfer.file_name_base_oid",
+                        "snmp.bulk_transfer.transfer_trigger_base_oid",
+                        "snmp.bulk_transfer.status_base_oid",
+                    ],
+                },
+            )
+            save_result(result)
+            return result
 
+        filename_oid = f"{oids.file_name_base_oid}.{command_file.index}"
+        trigger_oid = f"{oids.transfer_trigger_base_oid}.{command_file.index}"
+        status_oid = f"{oids.status_base_oid}.{command_file.index}"
+
+        try:
             set_file_result = self.snmp_set_string(filename_oid, command_file.filename)
             trigger_result = self.snmp_set_integer(trigger_oid, 1)
             status_result = self.snmp_get(status_oid)
 
-            success = True
-            details = {
-                "file": str(path),
-                "bulk_index": command_file.index,
-                "set_file_result": set_file_result,
-                "trigger_result": trigger_result,
-                "status_result": status_result,
-            }
+            result = ToolResult(
+                timestamp=now(),
+                host=self.host,
+                action=command_file.action,
+                success=True,
+                details={
+                    "file": str(path),
+                    "bulk_index": command_file.index,
+                    "filename_oid": filename_oid,
+                    "trigger_oid": trigger_oid,
+                    "status_oid": status_oid,
+                    "set_file_result": set_file_result,
+                    "trigger_result": trigger_result,
+                    "status_result": status_result,
+                },
+            )
 
-        result = ToolResult(
-            timestamp=now(),
-            host=self.host,
-            action=command_file.action,
-            success=success,
-            details=details,
-        )
+        except RuntimeError as exc:
+            result = ToolResult(
+                timestamp=now(),
+                host=self.host,
+                action=command_file.action,
+                success=False,
+                details={
+                    "file": str(path),
+                    "bulk_index": command_file.index,
+                    "filename_oid": filename_oid,
+                    "trigger_oid": trigger_oid,
+                    "status_oid": status_oid,
+                    "error": str(exc),
+                },
+            )
+
         save_result(result)
         return result
 
     def probe(self) -> ToolResult:
-        details = {
+        details: dict[str, Any] = {
             "ping": self.ping(),
             "http": self.http_probe(),
+            "community": self.community,
+            "tftp_root": str(self.tftp_root),
+            "bulk_transfer_configured": self.config.bulk_transfer_oids.is_complete,
         }
 
         try:
             details["snmp_sysdescr"] = self.snmp_get("1.3.6.1.2.1.1.1.0")
         except RuntimeError as exc:
             details["snmp_error"] = str(exc)
+
+        details["bulk_transfer_oid_check"] = self.verify_bulk_transfer_oids()
 
         result = ToolResult(
             timestamp=now(),
@@ -318,6 +473,7 @@ class ScotsmanKSBUN:
             success=bool(details["ping"]),
             details=details,
         )
+
         save_result(result)
         return result
 
@@ -407,15 +563,13 @@ class ScotsmanKSBUN:
             )
         )
 
-    def write_bin_schedule(self, schedule: dict[str, list[tuple[int, int]]]) -> ToolResult:
+    def write_bin_schedule(self, schedule: dict[str, list[list[int]]]) -> ToolResult:
         """
-        Write bin level schedule.
-
-        schedule format:
-            {
-                "Monday": [(60, 32), (660, 32), (900, 32), (1140, 0)],
-                ...
-            }
+        Schedule format:
+        {
+            "Monday": [[60, 32], [660, 32], [900, 32], [1140, 0]],
+            "Tuesday": [[60, 32], [660, 32], [900, 32], [1140, 0]]
+        }
 
         Times are minutes past midnight.
         Levels are 0 or 9 through 32.
@@ -434,11 +588,15 @@ class ScotsmanKSBUN:
 
         for day in days:
             entries = schedule.get(day)
+
             if entries is None or len(entries) != 4:
                 raise ValueError(f"{day} must contain exactly four time/level entries")
 
             previous_time = -1
-            for index, (minute, level) in enumerate(entries, start=1):
+
+            for index, pair in enumerate(entries, start=1):
+                minute, level = pair
+
                 if not 0 <= minute <= 1439:
                     raise ValueError(f"{day} time {index} must be 0-1439 minutes")
 
@@ -474,8 +632,8 @@ def main() -> None:
 
     parser = argparse.ArgumentParser()
     parser.add_argument("--host", required=True)
-    parser.add_argument("--community", default=DEFAULT_COMMUNITY)
-    parser.add_argument("--tftp-root", default=str(TFTP_ROOT))
+    parser.add_argument("--config", default=str(CONFIG_PATH))
+    parser.add_argument("--community", default=None)
 
     sub = parser.add_subparsers(dest="command", required=True)
 
@@ -499,10 +657,12 @@ def main() -> None:
 
     args = parser.parse_args()
 
+    config = load_config(Path(args.config))
+
     client = ScotsmanKSBUN(
         host=args.host,
+        config=config,
         community=args.community,
-        tftp_root=Path(args.tftp_root),
     )
 
     if args.command == "probe":
