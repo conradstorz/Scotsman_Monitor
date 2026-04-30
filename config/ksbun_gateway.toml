@@ -1,0 +1,13 @@
+# config/ksbun_gateway.toml
+
+[network]
+default_community = "public"
+tftp_root = "/srv/tftp"
+
+[snmp.bulk_transfer]
+file_name_base_oid = ""
+transfer_trigger_base_oid = ""
+status_base_oid = ""
+
+[snmp.discovery]
+walk_root_oid = ".1"

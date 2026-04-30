@@ -1,0 +1,1 @@
+_bft_flush_level_setting=3
