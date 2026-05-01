@@ -15,6 +15,7 @@ from .models import SensorConfig
 class NetworkConfig(BaseSettings):
     ksbu_private_interface: str = "eth0"
     ksbu_gateway_ip: str = "192.168.50.1"
+    ksbu_device_ip: str = "192.168.50.100"
 
 
 class LoggingConfig(BaseSettings):

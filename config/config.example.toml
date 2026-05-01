@@ -8,7 +8,11 @@ poll_interval_seconds = 30
 
 [network]
 ksbu_private_interface = "eth0"
+# Pi's own IP on the KSBU-N private link (set by 02_setup_network.sh)
 ksbu_gateway_ip = "192.168.50.1"
+# KSBU-N's IP — assigned by the Pi's DHCP server.
+# Discover after cabling: arp -n | grep eth0
+ksbu_device_ip = "192.168.50.100"
 
 [logging]
 level = "INFO"
