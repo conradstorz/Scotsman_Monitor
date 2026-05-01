@@ -1,0 +1,6 @@
+site_name = "Bad Config"
+
+[[temperature_sensors]]
+name = "bin_upper_air"
+location = "Bin"
+enabled = true
