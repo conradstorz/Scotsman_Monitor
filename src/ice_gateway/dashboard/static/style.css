@@ -1,0 +1,30 @@
+body {
+    font-family: sans-serif;
+    max-width: 960px;
+    margin: 0 auto;
+    padding: 1rem;
+    background: #f5f5f5;
+}
+
+nav {
+    background: #333;
+    padding: 0.5rem 1rem;
+    margin-bottom: 1rem;
+    border-radius: 4px;
+}
+
+nav a { color: white; text-decoration: none; margin-right: 1rem; }
+
+h1, h2 { color: #333; }
+
+table {
+    border-collapse: collapse;
+    width: 100%;
+    background: white;
+    margin-bottom: 1rem;
+}
+
+th, td { border: 1px solid #ddd; padding: 0.5rem 1rem; text-align: left; }
+th { background: #444; color: white; }
+tr:nth-child(even) { background: #f9f9f9; }
+section { margin-bottom: 2rem; }

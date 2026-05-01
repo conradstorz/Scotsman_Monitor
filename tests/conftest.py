@@ -1,7 +1,10 @@
 import pytest
+from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
+from sqlalchemy.pool import StaticPool
 
+from ice_gateway.dashboard.app import create_app
 from ice_gateway.database import Base, init_db
 from ice_gateway.models import SensorConfig, SensorReading
 from ice_gateway.sensors.base import SensorBusReader
@@ -9,7 +12,11 @@ from ice_gateway.sensors.base import SensorBusReader
 
 @pytest.fixture
 def db_engine():
-    engine = create_engine("sqlite:///:memory:")
+    engine = create_engine(
+        "sqlite:///:memory:",
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
+    )
     init_db(engine)
     yield engine
     Base.metadata.drop_all(engine)
@@ -35,3 +42,10 @@ def fake_sensor_bus():
         return FakeSensorBus(readings)
 
     return factory
+
+
+@pytest.fixture
+def app_client(db_engine):
+    app = create_app(db_engine)
+    with TestClient(app) as client:
+        yield client
