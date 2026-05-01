@@ -40,9 +40,7 @@ class OneWireSensorBusReader(SensorBusReader):
         try:
             raw = device_file.read_text()
         except OSError as exc:
-            logger.error(
-                "Bus fault reading {name}: {exc}", name=sensor.name, exc=exc
-            )
+            logger.error("Bus fault reading {name}: {exc}", name=sensor.name, exc=exc)
             return SensorReading(
                 sensor_id=sensor.id,
                 sensor_name=sensor.name,

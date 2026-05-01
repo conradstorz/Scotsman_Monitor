@@ -74,7 +74,8 @@ class TestOneWireSensorBusReader:
     def test_multiple_sensors(self, tmp_path):
         for sid, temp in [("28-aaa", "1000"), ("28-bbb", "2000")]:
             _write_sensor_file(
-                tmp_path, sid,
+                tmp_path,
+                sid,
                 f"xx : crc=xx YES\nxx t={temp}\n",
             )
         reader = _make_reader(tmp_path)
