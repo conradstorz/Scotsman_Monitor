@@ -21,8 +21,8 @@ async def polling_loop(
     while True:
         try:
             _poll_once(config, engine, sensor_bus)
-        except Exception as exc:
-            logger.error("Unexpected error in polling loop: {exc}", exc=exc)
+        except Exception:
+            logger.exception("Unexpected error in polling loop")
         await asyncio.sleep(config.poll_interval_seconds)
 
 

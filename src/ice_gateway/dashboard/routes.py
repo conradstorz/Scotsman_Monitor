@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Request
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, Response
 from fastapi.templating import Jinja2Templates
 from sqlalchemy import desc, select
 from sqlalchemy.engine import Engine
@@ -12,7 +12,7 @@ def create_router(engine: Engine, templates: Jinja2Templates) -> APIRouter:
     router = APIRouter()
 
     @router.get("/", response_class=HTMLResponse)
-    def overview(request: Request) -> HTMLResponse:
+    def overview(request: Request) -> Response:
         with Session(engine) as session:
             readings = (
                 session.execute(

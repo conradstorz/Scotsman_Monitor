@@ -20,6 +20,7 @@ def db_engine():
     init_db(engine)
     yield engine
     Base.metadata.drop_all(engine)
+    engine.dispose()
 
 
 @pytest.fixture
