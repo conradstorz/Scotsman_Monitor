@@ -2,6 +2,31 @@
 cat << 'EOF'
 === Ice Gateway Setup Guide ===
 
+--- BEFORE YOU BEGIN: Tailscale credentials ---
+
+Script 03 will prompt for a Tailscale auth key. Get one before you start:
+
+  1. Create a free Tailscale account at https://tailscale.com if you don't have one.
+
+  2. In the admin console, go to:
+       Settings → Keys → Generate auth key
+       https://login.tailscale.com/admin/settings/keys
+
+  3. Recommended key settings:
+       Reusable:    No  (one-time key, revokes itself after use)
+       Expiry:      90 days (or as short as you're comfortable with)
+       Ephemeral:   No  (Pi must persist in your tailnet after reboots)
+       Tags:        optional — tag:ice-gateway if you use ACL tags
+
+  4. Copy the key (starts with tskey-auth-...). Script 03 will prompt for it
+     interactively. It is not stored anywhere by the setup scripts.
+
+  5. After setup, the Pi appears in your tailnet as ice-gateway-<hostname>.
+     Access the dashboard from any device on your tailnet:
+       http://<tailscale-ip>:8080
+
+-----------------------------------------------
+
 Run these scripts in order on a fresh Raspberry Pi OS (64-bit) installation:
 
   sudo bash scripts/01_setup_os.sh        # Update OS, install base packages
