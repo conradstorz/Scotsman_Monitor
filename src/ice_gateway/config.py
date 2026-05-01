@@ -1,6 +1,9 @@
-from typing import Any, ClassVar, Tuple, Type
-from pydantic_settings import BaseSettings, SettingsConfigDict, PydanticBaseSettingsSource
-from pydantic_settings.utils import path_type_label
+from pydantic_settings import (
+    BaseSettings,
+    PydanticBaseSettingsSource,
+    SettingsConfigDict,
+)
+
 try:
     from pydantic_settings import TomlConfigSettingsSource
 except ImportError:
@@ -29,7 +32,6 @@ class AppConfig(BaseSettings):
         toml_file="config/config.local.toml",
         env_file=".env",
         env_nested_delimiter="__",
-        toml_file_encoding="utf-8",
     )
 
     site_name: str = "Ice Gateway"
@@ -46,12 +48,12 @@ class AppConfig(BaseSettings):
     @classmethod
     def settings_customise_sources(
         cls,
-        settings_cls: Type[BaseSettings],
+        settings_cls: type[BaseSettings],
         init_settings: PydanticBaseSettingsSource,
         env_settings: PydanticBaseSettingsSource,
         dotenv_settings: PydanticBaseSettingsSource,
         file_secret_settings: PydanticBaseSettingsSource,
-    ) -> Tuple[PydanticBaseSettingsSource, ...]:
+    ) -> tuple[PydanticBaseSettingsSource, ...]:
         sources: list[PydanticBaseSettingsSource] = [
             init_settings,
             env_settings,

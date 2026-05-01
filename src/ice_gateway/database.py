@@ -1,5 +1,7 @@
 from pathlib import Path
+
 from sqlalchemy import Column, DateTime, Float, Integer, String, create_engine
+from sqlalchemy.engine import Engine
 from sqlalchemy.orm import DeclarativeBase, Session
 
 DATA_DIR = Path("data")
@@ -34,13 +36,13 @@ class PiHealthRow(Base):
     disk_percent = Column(Float, nullable=False)
 
 
-def create_db_engine(db_path: Path = DB_PATH):
+def create_db_engine(db_path: Path = DB_PATH) -> Engine:
     return create_engine(f"sqlite:///{db_path}", echo=False)
 
 
-def init_db(engine) -> None:
+def init_db(engine: Engine) -> None:
     Base.metadata.create_all(engine)
 
 
-def get_session(engine) -> Session:
+def get_session(engine: Engine) -> Session:
     return Session(engine)

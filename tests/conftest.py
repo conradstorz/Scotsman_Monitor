@@ -1,6 +1,10 @@
 import pytest
 from sqlalchemy import create_engine
+from sqlalchemy.orm import Session
+
 from ice_gateway.database import Base, init_db
+from ice_gateway.models import SensorConfig, SensorReading
+from ice_gateway.sensors.base import SensorBusReader
 
 
 @pytest.fixture
@@ -13,13 +17,8 @@ def db_engine():
 
 @pytest.fixture
 def db_session(db_engine):
-    from sqlalchemy.orm import Session
     with Session(db_engine) as session:
         yield session
-
-
-from ice_gateway.sensors.base import SensorBusReader
-from ice_gateway.models import SensorConfig, SensorReading
 
 
 class FakeSensorBus(SensorBusReader):
@@ -34,4 +33,5 @@ class FakeSensorBus(SensorBusReader):
 def fake_sensor_bus():
     def factory(readings: list[SensorReading]) -> FakeSensorBus:
         return FakeSensorBus(readings)
+
     return factory

@@ -1,12 +1,14 @@
-from datetime import datetime, timezone
-from ice_gateway.database import SensorReadingRow, PiHealthRow, init_db
-from ice_gateway.constants import ReadQuality
-from sqlalchemy import create_engine, select
+from datetime import UTC, datetime
+
+from sqlalchemy import select
 from sqlalchemy.orm import Session
+
+from ice_gateway.constants import ReadQuality
+from ice_gateway.database import PiHealthRow, SensorReadingRow
 
 
 def _now() -> datetime:
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)
 
 
 def test_sensor_reading_round_trip(db_engine):

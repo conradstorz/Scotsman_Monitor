@@ -1,7 +1,7 @@
-from enum import Enum
+from enum import StrEnum
 
 
-class ReadQuality(str, Enum):
+class ReadQuality(StrEnum):
     OK = "ok"
     CRC_ERROR = "crc_error"
     IMPOSSIBLE_VALUE = "impossible_value"

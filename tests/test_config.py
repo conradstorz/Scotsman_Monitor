@@ -1,12 +1,17 @@
 import shutil
+
 import pytest
 from pydantic import ValidationError
+
 from ice_gateway.config import AppConfig
 
 
 def test_config_loads_valid_toml(monkeypatch, tmp_path):
     (tmp_path / "config").mkdir()
-    shutil.copy("tests/fixtures/config_valid.toml", tmp_path / "config" / "config.local.toml")
+    shutil.copy(
+        "tests/fixtures/config_valid.toml",
+        tmp_path / "config" / "config.local.toml",
+    )
     (tmp_path / ".env").write_text("")
     monkeypatch.chdir(tmp_path)
     config = AppConfig()
