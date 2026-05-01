@@ -9,7 +9,8 @@ Type=simple
 User=pi
 WorkingDirectory=/opt/ice_gateway
 EnvironmentFile=/etc/ice-gateway/ice-gateway.env
-ExecStart=/home/pi/.local/bin/uv run ice-gateway
+Environment="PATH=/home/pi/.local/bin:/usr/local/bin:/usr/bin:/bin"
+ExecStart=uv run ice-gateway
 Restart=always
 RestartSec=10
 StandardOutput=journal

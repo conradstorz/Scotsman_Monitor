@@ -37,6 +37,7 @@ class PiHealthRow(Base):
 
 
 def create_db_engine(db_path: Path = DB_PATH) -> Engine:
+    db_path.parent.mkdir(parents=True, exist_ok=True)
     return create_engine(f"sqlite:///{db_path}", echo=False)
 
 

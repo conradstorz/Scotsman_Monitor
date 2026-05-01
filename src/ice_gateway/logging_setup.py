@@ -15,6 +15,7 @@ _FILE_FORMAT = "{time:YYYY-MM-DD HH:mm:ss} | {level: <8} | {name}:{line} - {mess
 
 
 def configure_logging(level: str = "INFO", retain_days: int = 365) -> None:
+    LOGS_DIR.mkdir(parents=True, exist_ok=True)
     logger.remove()
     logger.add(
         sys.stderr,
