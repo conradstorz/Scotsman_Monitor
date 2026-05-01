@@ -7,7 +7,7 @@ Build a Raspberry Pi 4 based monitoring and control gateway for a Scotsman Prodi
 The gateway will:
 
 - Monitor independent temperature probes inside and around the ice maker.
-- Communicate directly with the KSBU-N Smart-Board.
+- Communicate directly with the KSBU-N Smart-Board. (Note; seperate work has been done already to create a script to communicate with the KSBU-N. The script can be found here in this project folders.)
 - Log detailed operating history locally.
 - Provide private remote access through Tailscale.
 - Issue alerts through multiple channels.
@@ -266,9 +266,20 @@ Example filename:
 2026-04-27T14-30-00_ksbu_snapshot.json
 ```
 
----
+### Parser Test Fixtures
 
-## Hardware Bill of Materials
+Representative KSBU-N HTML and JSON responses should be captured early and saved as static test fixtures:
+
+```text
+tests/fixtures/ksbu_status_sample.html    # normal operating state
+tests/fixtures/ksbu_status_fault.html     # active fault code present
+tests/fixtures/ksbu_status_bin_full.html  # bin full state
+tests/fixtures/ksbu_status_harvest.html   # during harvest cycle
+```
+
+These fixtures allow the parser to be tested without a live KSBU-N. The parser should be a pure function of input text → structured data, with no network or I/O dependencies, so it is trivially unit-testable against these files.
+
+
 
 ### Required Core Hardware
 
@@ -346,7 +357,11 @@ Example filename:
 | ruff | Linting/format checks |
 | pytest | Testing |
 | pytest-asyncio | Async test support |
-| mypy or pyright | Optional type checking |
+| pytest-cov | Test coverage measurement and reporting |
+| pytest-httpserver | Fake HTTP server for KSBU-N integration tests |
+| factory-boy | Test data factories for sensor readings, alerts, KSBU status |
+| respx | HTTPX request mocking for KSBU-N unit tests |
+| mypy or pyright | Type checking (treat as required, not optional) |
 
 ### Python Application Dependencies
 
@@ -398,6 +413,8 @@ Example filename:
 The initial system should support at least 9 DS18B20 Dallas temperature sensors.
 
 The code should not assume exactly 9 sensors. It should support any number of configured sensors.
+Likely temperatures are; Exhaust Air, Compressor Body, Compressor Hi Side and Lo side, Condensor Hi and Lo sides, Water Bath, Purge Water (to detect failed purge valve), Incoming Air, (Some ice makers have 2 ice forming evaporators and each will have;) Evap Hi and Lo sides and Hot gas valve.
+
 
 ### Suggested Probe Placement
 
@@ -666,6 +683,10 @@ The system should support:
 
 ### Alert Deduplication
 
+The deduplication key is the combination of `(category, source, severity)`.
+
+A new alert is created only when no active alert with the same key exists. While the same condition persists, the existing record is updated (incrementing `notification_count` and `updated_at`). A distinct new alert is created when the condition clears and then re-triggers.
+
 Example logic:
 
 ```text
@@ -853,6 +874,14 @@ The software should not require code changes for:
 - Relay definitions.
 - Site/machine identity.
 
+### Configuration File Format
+
+The project uses **TOML** as the primary configuration format (consistent with the existing `config/ksbun_gateway.toml` file and `pyproject.toml`).
+
+The example configuration below uses JSON for readability, but the actual implementation should use TOML. The `pydantic-settings` integration should load from the TOML file and support environment-variable overrides for any field, with secrets always coming from the `.env` file or environment variables — never from the TOML config.
+
+Validation of the loaded configuration should be tested in `test_config.py` using known-good and known-bad TOML inputs.
+
 ### Example Configuration
 
 ```json
@@ -958,10 +987,51 @@ ice_gateway/
   systemd/
     ice-gateway.service
   tests/
+    conftest.py                        # shared fixtures: in-memory DB, fake config, fake hardware drivers
+    factories.py                       # test data factories for sensor readings, alerts, KSBU status
+    fixtures/
+      ksbu_status_sample.html          # representative KSBU-N web page for parser tests
+      ksbu_status_fault.html           # fault-state page for alert trigger tests
+      ksbu_status_unreachable.txt      # notes for simulating KSBU-N timeout
     test_config.py
-    test_sensor_models.py
-    test_alert_rules.py
-    test_ksbu_parser.py
+    test_models.py
+
+    sensors/
+      test_onewire.py                  # sensor bus polling, missing/new sensor detection
+      test_sensor_failure_modes.py     # impossible values, repeated failures, bus failure
+      test_pi_health.py
+      test_ups.py                      # power loss sequence, low-battery shutdown trigger
+
+    ksbu/
+      test_nafem_client.py             # NAFEM request/response cycle, auth failure, retry
+      test_web_client.py               # login flow, page parsing, session expiry
+      test_parser.py                   # parse known HTML/JSON → structured status
+      test_snapshots.py                # raw capture save logic, retention cleanup
+
+    alerts/
+      test_alert_manager.py            # deduplication, cooldown, escalation, resolution
+      test_alert_rules.py              # each alert type fires at right threshold
+      test_email.py
+      test_sms.py
+      test_mqtt.py
+
+    dashboard/
+      test_routes.py                   # FastAPI TestClient, each page returns 200
+      test_overview.py                 # correct health state rendered
+
+    tasks/
+      test_polling.py                  # isolated subsystem failure does not stop loop
+      test_retention.py                # old records deleted on schedule
+
+    database/
+      test_writes.py                   # each model round-trips through SQLite
+      test_integrity.py                # startup integrity check, recovery after crash
+
+    integration/
+      test_sensor_to_alert.py          # end-to-end: fake bus missing → alert fires → DB entry
+      test_ksbu_to_alert.py            # fake KSBU response with fault → alert fires
+      test_power_sequence.py           # fake UPS: power loss → log → alert → shutdown
+
   src/
     ice_gateway/
       __init__.py
@@ -1104,7 +1174,13 @@ temperature_c
 temperature_f
 read_success
 error_message
+ksbu_reachable_at_read
+read_quality
 ```
+
+`ksbu_reachable_at_read` is a boolean recording whether the KSBU-N was reachable at the time of this reading, allowing queries to flag readings taken during communication outages.
+
+`read_quality` is an enum: `ok`, `crc_error`, `impossible_value`, `missing`, `bus_fault`.
 
 ### KSBU Status
 
@@ -1322,22 +1398,41 @@ WantedBy=multi-user.target
 
 Goals:
 
-- Raspberry Pi OS install.
-- uv project setup.
-- Tailscale setup.
-- Static private KSBU subnet.
-- DS18B20 sensor discovery.
-- Sensor config mapping.
-- SQLite logging.
-- Loguru logging.
-- Basic FastAPI dashboard.
-- Pi health monitoring.
-- Basic systemd service.
+**Checkpoint 1a — Pi setup and connectivity:**
+- [ ] Raspberry Pi OS install.
+- [ ] uv project setup.
+- [ ] Tailscale setup.
+- [ ] Repeatable setup script for fresh Raspberry Pi.
+- [ ] Static private KSBU subnet configured.
+- [ ] DS18B20 sensor discovery working.
+- [ ] Sensor config mapping.
+
+**Checkpoint 1b — Data foundation:**
+- [ ] SQLite logging.
+- [ ] Loguru logging with rotation.
+- [ ] In-memory DB test fixture established.
+- [ ] `test_config.py` passing.
+- [ ] `test_onewire.py` passing against fake sensor bus.
+- [ ] `test_pi_health.py` passing.
+
+**Checkpoint 1c — Visible system:**
+- [ ] Basic FastAPI dashboard running.
+- [ ] Pi health monitoring visible.
+- [ ] Basic systemd service starts on boot.
+- [ ] Dashboard reachable over Tailscale.
 
 Deliverable:
 
 ```text
 A working Pi that can log all temperature sensors and show them remotely over Tailscale.
+```
+
+Test deliverable:
+
+```text
+conftest.py with shared fixtures.
+test_config.py, test_models.py, sensors/test_onewire.py, sensors/test_pi_health.py all passing.
+Coverage ≥ 80% on sensors/ and config.py.
 ```
 
 ### Phase 2 — KSBU-N Integration
@@ -1360,12 +1455,22 @@ Deliverable:
 The Pi can show both independent sensors and KSBU-N controller status.
 ```
 
+Test deliverable:
+
+```text
+ksbu/test_parser.py passing against HTML fixtures (normal, fault, harvest states).
+ksbu/test_web_client.py passing against pytest-httpserver fake.
+ksbu/test_nafem_client.py passing or explicitly skipped if NAFEM not available.
+ksbu/test_snapshots.py passing.
+integration/test_ksbu_to_alert.py passing.
+```
+
 ### Phase 3 — Alerts
 
 Goals:
 
 - Email alerts.
-- SMS alerts.
+- SMS alerts. (Stub for Twillio here at first)
 - MQTT/Home Assistant publishing.
 - Dashboard active alert panel.
 - Alert deduplication.
@@ -1379,11 +1484,20 @@ Deliverable:
 The system can notify you when something matters without constant noise.
 ```
 
+Test deliverable:
+
+```text
+alerts/test_alert_manager.py: deduplication, cooldown, escalation, resolution all covered.
+alerts/test_alert_rules.py: every alert type fires at correct threshold.
+alerts/test_email.py, test_sms.py, test_mqtt.py passing with channel mocks.
+integration/test_sensor_to_alert.py passing.
+```
+
 ### Phase 4 — UPS / Safe Shutdown
 
 Goals:
 
-- Integrate UPS module.
+- Integrate UPS module. (UPS will need to power cellular internet gateway as well as rpi)
 - Detect power loss.
 - Send power-loss alert.
 - Track battery runtime.
@@ -1394,6 +1508,13 @@ Deliverable:
 
 ```text
 The Pi survives outages cleanly and reports what happened.
+```
+
+Test deliverable:
+
+```text
+sensors/test_ups.py: full power-loss → continue → low battery → shutdown sequence.
+integration/test_power_sequence.py: fake UPS driver, confirms alert firing and DB events.
 ```
 
 ### Phase 5 — Expansion I/O
@@ -1414,6 +1535,14 @@ Deliverable:
 The codebase is ready for future control/monitoring circuits without redesign.
 ```
 
+Test deliverable:
+
+```text
+controls/test_safety_policy.py: every control action requires explicit enable, every
+  unsafe combination is rejected, audit log entry is confirmed.
+All relay and digital input tests use fake GPIO drivers — no hardware required.
+```
+
 ### Phase 6 — Reporting / Maintenance
 
 Goals:
@@ -1432,43 +1561,198 @@ Deliverable:
 The gateway becomes a service history and predictive maintenance tool.
 ```
 
+Test deliverable:
+
+```text
+tasks/test_retention.py: old records deleted, retention thresholds respected.
+Backup export produces a valid archive without secrets.
+Daily/weekly summary generation tested with known DB contents.
+Full test suite passing with ≥ 80% coverage across all modules.
+```
+
 ---
 
 ## Testing Requirements
 
+### Design Principle: Hardware Abstraction First
+
+The most important testing requirement is that **all hardware-touching code must sit behind a protocol or ABC**. Without this, every test that involves sensors, UPS, GPIO, or network interfaces requires physical hardware. Define these abstractions before writing any implementation:
+
+- `SensorBusReader` — ABC for reading the One-Wire bus. Production: reads `/sys/bus/w1/devices/`. Test: `FakeSensorBus` returning scripted readings or failures.
+- `UPSStatusProvider` — ABC for battery/power state. Production: reads HAT via I2C. Test: `FakeUPS` returning scripted battery percentages and power-present flags.
+- `NetworkChecker` — ABC for Tailscale/internet/KSBU reachability. Test: `FakeNetworkChecker` injecting "offline" scenarios without disconnecting anything.
+- `KSBUNTransport` — ABC for the KSBU-N communication layer. Both NAFEM and web clients implement this. Test: `FakeKSBUNTransport` returning fixture HTML/JSON.
+- `GPIOController` — ABC for relay/digital I/O. Test: `FakeGPIO` recording state changes without hardware.
+
+All production code must accept these dependencies via constructor injection, not import-time globals.
+
+### Shared Test Fixtures (`conftest.py`)
+
+Key shared fixtures that must be defined before any subsystem tests:
+
+| Fixture | Purpose |
+|---|---|
+| `db_session` | In-memory SQLite session, rolled back after each test |
+| `fake_sensor_bus(readings)` | Injectable fake that returns scripted readings or errors |
+| `fake_ksbu_server` | `pytest-httpserver` fixture serving known KSBU-N HTML pages |
+| `fake_mqtt_client` | Captures published messages for assertion |
+| `app_client` | FastAPI `TestClient` with all fake dependencies injected |
+| `fake_ups(state)` | Scripted UPS battery/power states |
+| `alert_manager` | Alert manager instance wired to in-memory DB and fake channels |
+
 ### Unit Tests
 
-Test:
+Each test module should test one unit in isolation using fakes for all dependencies.
 
-- Config loading.
-- Sensor model validation.
-- Alert rules.
-- Deduplication logic.
-- KSBU-N parser behavior.
-- Database writes.
-- Control safety policy.
+**`test_config.py`**
+- Config loads correctly from valid TOML.
+- Missing required fields raise a validation error.
+- Unknown fields raise a validation error or are ignored (document which).
+- Environment variable overrides work for all secret fields.
+
+**`test_models.py`**
+- Each Pydantic model accepts valid data.
+- Each Pydantic model rejects invalid data with correct error fields.
+- `read_quality` enum values cover all documented failure modes.
+
+**`sensors/test_onewire.py`**
+- All configured sensors return readings normally.
+- Missing sensor is detected and flagged.
+- New unconfigured sensor is detected and flagged.
+- CRC error is classified as `read_quality = crc_error`.
+- Impossible temperature value (below -50°C or above 150°C) is flagged.
+- Bus failure stops bus reads but does not raise to the polling loop.
+- Each failure mode produces the correct log message.
+
+**`sensors/test_sensor_failure_modes.py`**
+- Repeated failures increment a failure counter.
+- Alert fires after configured failure threshold.
+- Single recovery clears the failure count.
+
+**`sensors/test_pi_health.py`**
+- CPU temperature, memory, disk, and network stats are read and stored.
+- High CPU temperature triggers the correct alert category.
+
+**`sensors/test_ups.py`**
+- External power present: no alert.
+- Power lost: power-loss event logged, alert fires.
+- Power restored: recovery event logged, recovery alert fires.
+- Low battery threshold: shutdown-pending alert fires.
+- Battery percentage stored correctly in power_events table.
+
+**`ksbu/test_parser.py`**
+- Parse `ksbu_status_sample.html` → expected field values (fixture-driven).
+- Parse `ksbu_status_fault.html` → fault code present, parse_success True.
+- Parse `ksbu_status_bin_full.html` → bin_full True.
+- Parse `ksbu_status_harvest.html` → harvest_cycle_active True.
+- Malformed HTML → parse_success False, parse_error populated.
+- Parser is a pure function: no I/O, no network calls.
+
+**`ksbu/test_web_client.py`**
+- Login page served → client posts credentials → status page fetched.
+- Session expiry detected → re-authentication attempted.
+- 3 consecutive failures → unreachable flag set.
+- Retry/backoff fires on 5xx responses.
+
+**`ksbu/test_nafem_client.py`**
+- Successful request/response cycle → structured data returned.
+- Auth failure → logged, fallback triggered.
+- Test skipped with clear skip message if NAFEM endpoint is not yet characterized.
+
+**`ksbu/test_snapshots.py`**
+- Raw HTML saved to correct path with correct filename format.
+- Retention cleanup deletes files older than configured threshold.
+- Save failure is logged but does not propagate.
+
+**`alerts/test_alert_manager.py`**
+- New alert condition → alert record created with `active = True`.
+- Same condition re-checked → existing record updated, not duplicated (dedup key: `(category, source, severity)`).
+- Condition clears → alert resolved, `resolved_at` populated.
+- Same condition re-triggers after resolution → new alert record created.
+- Cooldown: notification not sent again until interval expires.
+- `notification_count` increments on each reminder send.
+
+**`alerts/test_alert_rules.py`**
+- Each alert type in the Initial Alert Types table is tested individually.
+- Bin temperature above threshold → `BIN_TOO_WARM` alert with `ERROR` severity.
+- Condenser intake above threshold → `CONDENSER_INTAKE_HOT` alert.
+- Sensor missing for configured threshold → `SENSOR_MISSING` alert.
+- KSBU-N unreachable for configured threshold → `KSBU_UNREACHABLE` alert.
+- Disk above threshold → `DISK_NEARLY_FULL` alert.
+
+**`alerts/test_email.py`, `test_sms.py`, `test_mqtt.py`**
+- Each channel sends correctly formatted messages when given an alert record.
+- Channel unavailable → exception is caught and logged, not propagated.
+- MQTT publishes to the correct topic structure.
+
+**`controls/test_safety_policy.py`**
+- Relay action with `relay_outputs_enabled = False` → rejected, audit log entry.
+- Relay action with `relay_outputs_enabled = True` and confirmed → accepted, audit log entry.
+- `actual_state` in control event reflects actual GPIO result.
+
+**`database/test_writes.py`**
+- Each model (sensor reading, KSBU status, alert record, power event, control event) round-trips through SQLite.
+- Timestamps are stored as UTC and retrieved correctly.
+
+**`database/test_integrity.py`**
+- Startup integrity check passes on a clean DB.
+- Startup integrity check detects and logs corruption.
+
+**`tasks/test_polling.py`**
+- KSBU-N unavailable: sensor logging continues normally.
+- MQTT unavailable: local DB write still occurs.
+- One sensor missing: other sensors still read correctly.
+- Exception in one subsystem does not propagate to the main polling loop.
+
+**`tasks/test_retention.py`**
+- Records older than retention threshold are deleted.
+- Records within retention threshold are kept.
+- Raw capture files older than configured days are deleted.
+
+**`dashboard/test_routes.py`**
+- Every defined dashboard route returns 200 with `app_client`.
+- Overview page reflects current health state from injected fake data.
 
 ### Integration Tests
 
-Test:
+Integration tests wire multiple real subsystems together with only hardware fakes at the boundaries.
 
-- Fake DS18B20 data source.
-- Fake KSBU-N web server.
-- Fake MQTT broker or mocked publish.
-- Alert channel mocks.
-- Database retention job.
+**`integration/test_sensor_to_alert.py`**
+- Fake sensor bus returns missing sensor → polling loop detects → alert record created → DB entry confirmed.
 
-### Field Tests
+**`integration/test_ksbu_to_alert.py`**
+- Fake KSBU server returns fault HTML → parser extracts fault → alert manager creates fault alert → MQTT publish captured.
 
-Test:
+**`integration/test_power_sequence.py`**
+- Fake UPS: external power present → no event.
+- Power lost → power_events record created → alert fires.
+- Battery drops below threshold → shutdown-pending alert fires.
+- Power restored → recovery event logged → recovery alert fires.
 
-- Pull one sensor and verify missing-sensor alert.
-- Disconnect KSBU-N Ethernet and verify unreachable alert.
-- Block internet and verify local logging continues.
-- Disconnect power and verify UPS behavior.
-- Fill disk threshold simulation.
-- Reboot and verify automatic startup.
-- Confirm Tailscale access remotely.
+### Field Tests (Manual Acceptance)
+
+These are manual verification steps performed on the installed system before declaring a phase complete:
+
+- Pull one DS18B20 sensor and verify `SENSOR_MISSING` alert fires within expected window.
+- Disconnect KSBU-N Ethernet and verify `KSBU_UNREACHABLE` alert fires.
+- Block internet access and verify local logging continues uninterrupted.
+- Disconnect site power and verify UPS behavior, power-loss alert, and clean shutdown.
+- Fill disk above threshold and verify `DISK_NEARLY_FULL` alert fires.
+- Reboot Pi and verify `ice-gateway.service` starts automatically.
+- Confirm dashboard is reachable over Tailscale from a remote device.
+
+### Coverage Target
+
+```text
+Minimum: 80% line coverage across all src/ modules.
+Priority: 100% branch coverage of alert_rules.py and controls/policy.py.
+```
+
+Run with:
+
+```bash
+uv run pytest --cov=src/ice_gateway --cov-report=term-missing
+```
 
 ---
 
@@ -1544,6 +1828,15 @@ The project should use:
 - Sphinx-style docstrings for functions.
 - Existing comments should be preserved once code exists; if comments are wrong, add clarification rather than deleting them.
 
+### Async Test Configuration
+
+All async code uses `pytest-asyncio`. Set asyncio mode in `pyproject.toml` to avoid per-test decoration:
+
+```toml
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+```
+
 ### Logging Preferences
 
 Use detailed logging with messages suitable for field debugging.
@@ -1557,6 +1850,48 @@ WARNING: KSBU-N unreachable after 3 attempts
 ERROR: Sensor bin_upper_air missing for 120 seconds
 CRITICAL: Power failure detected, battery at 18%, shutdown pending
 ```
+
+---
+
+## Code Quality Gates
+
+The following checks must pass before any code is considered complete. These should be run locally before commit and enforced in CI.
+
+### Linting and Formatting
+
+```bash
+uv run ruff check src/ tests/
+uv run ruff format --check src/ tests/
+```
+
+`ruff` is the sole formatting and lint tool. Do not use `black`, `flake8`, or `isort` separately.
+
+### Type Checking
+
+```bash
+uv run mypy src/ice_gateway --strict --no-error-summary
+```
+
+`mypy` strict mode is required across all `src/` code. `tests/` may use `--ignore-missing-imports` for test-only packages.
+
+### Test Suite
+
+```bash
+uv run pytest --cov=src/ice_gateway --cov-report=term-missing --cov-fail-under=80
+```
+
+Minimum 80% line coverage. 100% branch coverage required on `alerts/rules.py` and `controls/policy.py`.
+
+### CI Pipeline Order
+
+```text
+1. ruff check
+2. ruff format --check
+3. mypy strict
+4. pytest with coverage
+```
+
+Any failure in any step blocks merging. Steps run in order; later steps are skipped if earlier steps fail to reduce noise.
 
 ---
 
