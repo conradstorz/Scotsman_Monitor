@@ -1,0 +1,22 @@
+site_name = "Test Location"
+machine_name = "Test Machine"
+timezone = "UTC"
+poll_interval_seconds = 30
+
+[network]
+ksbu_private_interface = "eth0"
+ksbu_gateway_ip = "192.168.50.1"
+
+[logging]
+level = "DEBUG"
+retain_days = 30
+
+[dashboard]
+host = "127.0.0.1"
+port = 8080
+
+[[temperature_sensors]]
+id = "28-test000000"
+name = "test_sensor"
+location = "Test location"
+enabled = true
