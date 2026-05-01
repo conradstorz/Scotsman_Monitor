@@ -1,0 +1,20 @@
+[Unit]
+Description=Ice Gateway Monitor
+Documentation=https://github.com/your-repo/scotsman-monitor
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=pi
+WorkingDirectory=/opt/ice_gateway
+EnvironmentFile=/etc/ice-gateway/ice-gateway.env
+ExecStart=/home/pi/.local/bin/uv run ice-gateway
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=ice-gateway
+
+[Install]
+WantedBy=multi-user.target
