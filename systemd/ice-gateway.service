@@ -6,10 +6,10 @@ Wants=network-online.target
 
 [Service]
 Type=simple
-User=pi
+User=APP_USER
 WorkingDirectory=/opt/ice_gateway
 EnvironmentFile=/etc/ice-gateway/ice-gateway.env
-Environment="PATH=/home/pi/.local/bin:/usr/local/bin:/usr/bin:/bin"
+Environment="PATH=/home/APP_USER/.local/bin:/usr/local/bin:/usr/bin:/bin"
 ExecStart=uv run ice-gateway
 Restart=always
 RestartSec=10

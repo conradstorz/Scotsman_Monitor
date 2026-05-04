@@ -8,6 +8,9 @@ PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
 APP_DIR="/opt/ice_gateway"
 ENV_FILE="/etc/ice-gateway/ice-gateway.env"
 
+# Determine the actual user who should own the app (works with or without sudo)
+DEPLOY_USER="${SUDO_USER:-${USER}}"
+
 # Copy project to /opt
 mkdir -p "$APP_DIR"
 rsync -a --exclude='.git' --exclude='.venv' "$PROJECT_DIR/" "$APP_DIR/"
@@ -30,8 +33,13 @@ if [ ! -f "$ENV_FILE" ]; then
     echo "Created $ENV_FILE — edit with your secrets"
 fi
 
-# Install and start systemd service
-cp "$APP_DIR/systemd/ice-gateway.service" /etc/systemd/system/
+# Ensure the app directory and logs dir are writable by the service user
+mkdir -p "$APP_DIR/logs"
+chown -R "$DEPLOY_USER:$DEPLOY_USER" "$APP_DIR"
+
+# Install and start systemd service — substitute actual username into unit file
+sed "s/APP_USER/$DEPLOY_USER/g" "$APP_DIR/systemd/ice-gateway.service" \
+    > /etc/systemd/system/ice-gateway.service
 systemctl daemon-reload
 systemctl enable ice-gateway
 systemctl start ice-gateway
