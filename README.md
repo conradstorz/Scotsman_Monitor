@@ -18,10 +18,10 @@ Raspberry Pi monitoring gateway for a Scotsman Prodigy ice machine. The Pi sits 
 ## Setup (fresh Raspberry Pi OS 64-bit)
 
 ```bash
-git clone https://github.com/conradstorz/Scotsman_Monitor
-cd Scotsman_Monitor
-sudo bash setup.sh
+curl -fsSL https://raw.githubusercontent.com/conradstorz/Scotsman_Monitor/master/bootstrap.sh | sudo bash
 ```
+
+No git required on the Pi — the bootstrap installs it if missing, clones the repo into `~/Scotsman_Monitor`, and runs `setup.sh` automatically.
 
 `setup.sh` calls the numbered scripts in order and stops on any failure:
 

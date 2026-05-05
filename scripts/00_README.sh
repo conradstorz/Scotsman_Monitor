@@ -32,9 +32,10 @@ Script 04 will prompt for a Tailscale auth key. Get one first:
 
 --- Bootstrap (run on a fresh Raspberry Pi OS 64-bit install) ---
 
-  git clone https://github.com/<YOUR_GITHUB_USERNAME>/Scotsman_Monitor
-  cd Scotsman_Monitor
-  sudo bash setup.sh
+  curl -fsSL https://raw.githubusercontent.com/conradstorz/Scotsman_Monitor/master/bootstrap.sh | sudo bash
+
+  The bootstrap script installs git if missing, clones the repo into
+  ~/Scotsman_Monitor, and runs setup.sh automatically.
 
 setup.sh calls these scripts in order (all run as root):
 
