@@ -23,7 +23,7 @@ else
 fi
 
 # Install Python dependencies (no dev tools on the Pi)
-sudo -u argus bash -c "cd '$APP_DIR' && /home/argus/.local/bin/uv sync --no-dev"
+sudo -u argus /home/argus/.local/bin/uv --directory "$APP_DIR" sync --no-dev
 echo "uv sync complete"
 
 # Create config.local.toml if missing
