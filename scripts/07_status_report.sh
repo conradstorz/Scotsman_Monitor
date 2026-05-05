@@ -43,6 +43,15 @@ else
     echo "  $APP_DIR not found (app may not be deployed yet)"
 fi
 
+# ── Watchdog reset history ────────────────────────────────────────────────────
+section "Watchdog reset history (ice-gateway tag, daemon.crit)"
+journalctl -t ice-gateway -p crit --no-pager 2>/dev/null \
+    || echo "  (no watchdog reset events recorded)"
+echo
+echo "  Last boot watchdog check:"
+journalctl -t ice-gateway -p info -n 1 --no-pager 2>/dev/null \
+    | grep -i "watchdog check" || echo "  (not found — watchdog service may not have run yet)"
+
 # ── Network-online dependency ─────────────────────────────────────────────────
 section "network-online.target — status"
 systemctl status network-online.target --no-pager --lines=0 2>/dev/null

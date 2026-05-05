@@ -1,0 +1,16 @@
+[Unit]
+Description=Ice Gateway — Watchdog Reset Detector
+Documentation=https://github.com/conradstorz/Scotsman_Monitor
+# Run once per boot, before the main service, so the crit entry lands in the
+# journal before ice-gateway.service logs its first line.
+After=network-online.target
+Wants=network-online.target
+Before=ice-gateway.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/home/argus/ice_gateway/scripts/watchdog_check.sh
+
+[Install]
+WantedBy=multi-user.target
