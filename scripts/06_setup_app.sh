@@ -4,13 +4,20 @@ set -euo pipefail
 echo "=== Step 6: App Install ==="
 
 REPO_URL="${1:?ERROR: pass repo URL as first argument (called automatically by setup.sh)}"
+REPO_BRANCH="${2:-master}"
 APP_DIR="/home/argus/ice_gateway"
 
 # Clone as root (avoids per-user git config issues), then fix ownership.
-if [ -d "$APP_DIR/.git" ]; then
+if [ -d "$APP_DIR/.git" ] && [ -f "$APP_DIR/pyproject.toml" ]; then
     echo "App directory already exists — skipping clone"
+elif [ -d "$APP_DIR/.git" ] && [ ! -f "$APP_DIR/pyproject.toml" ]; then
+    echo "Incomplete clone detected — fetching and checking out branch '$REPO_BRANCH'"
+    git config --global --add safe.directory "$APP_DIR"
+    git -C "$APP_DIR" fetch origin "$REPO_BRANCH"
+    git -C "$APP_DIR" checkout "$REPO_BRANCH"
+    chown -R argus:argus "$APP_DIR"
 else
-    git clone "$REPO_URL" "$APP_DIR"
+    git clone --branch "$REPO_BRANCH" "$REPO_URL" "$APP_DIR"
     chown -R argus:argus "$APP_DIR"
     echo "Cloned $REPO_URL → $APP_DIR"
 fi

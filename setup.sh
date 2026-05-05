@@ -19,6 +19,10 @@ if [ -z "$REPO_URL" ]; then
 fi
 REPO_URL="$(echo "$REPO_URL" | sed 's|git@\([^:]*\):|https://\1/|')"
 
+# Pass the branch we're running from so the clone targets the same branch,
+# not whatever the remote's default branch happens to be.
+REPO_BRANCH="$(git -C "$SCRIPT_DIR" rev-parse --abbrev-ref HEAD 2>/dev/null || echo 'master')"
+
 echo "=== Ice Gateway Setup ==="
 echo "Repo: $REPO_URL"
 echo ""
@@ -41,7 +45,7 @@ run_step "argus user"        "$SCRIPT_DIR/scripts/02_create_argus.sh"
 run_step "Network"           "$SCRIPT_DIR/scripts/03_setup_network.sh"
 run_step "Tailscale"         "$SCRIPT_DIR/scripts/04_setup_tailscale.sh"
 run_step "One-Wire hardware" "$SCRIPT_DIR/scripts/05_setup_onewire.sh"
-run_step "App install"       "$SCRIPT_DIR/scripts/06_setup_app.sh" "$REPO_URL"
+run_step "App install"       "$SCRIPT_DIR/scripts/06_setup_app.sh" "$REPO_URL" "$REPO_BRANCH"
 run_step "Systemd service"   "$SCRIPT_DIR/scripts/07_deploy_service.sh"
 
 echo "=== Setup complete. Next steps ==="
