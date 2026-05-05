@@ -13,34 +13,63 @@ Raspberry Pi monitoring gateway for a Scotsman Prodigy ice machine. The Pi sits 
 - **eth0** — Pi is DHCP server (192.168.50.1/24); KSBU-N connects here
 - **wlan0** — DHCP from site router; internet access and Tailscale VPN
 - **Dashboard** — `http://<tailscale-ip>:8080`
+- **Service user** — `argus` (dedicated account, owns all app files)
 
 ## Setup (fresh Raspberry Pi OS 64-bit)
 
-Run scripts in order:
-
 ```bash
-sudo bash scripts/01_setup_os.sh        # Update OS, install base packages
-sudo bash scripts/02_setup_network.sh   # Static IP + DHCP server on eth0, UFW firewall
-sudo bash scripts/03_setup_tailscale.sh # Install Tailscale (requires auth key — see below)
-sudo bash scripts/04_setup_onewire.sh   # Enable DS18B20 1-wire sensors
-     bash scripts/05_setup_python.sh    # Install uv and Python dependencies
-sudo bash scripts/06_deploy_app.sh      # Deploy app, install systemd service
+git clone https://github.com/conradstorz/Scotsman_Monitor
+cd Scotsman_Monitor
+sudo bash setup.sh
 ```
 
-> **Tailscale auth key** — before running script 03, generate a one-time key at
+`setup.sh` calls the numbered scripts in order and stops on any failure:
+
+| Script | Run as | Purpose |
+|---|---|---|
+| `scripts/01_setup_os.sh` | root | OS updates, base packages (snmp, tftpd-hpa, etc.) |
+| `scripts/02_create_argus.sh` | root | Create `argus` service user, groups, sudoers rules |
+| `scripts/03_setup_network.sh` | root | Static IP + DHCP server on eth0, UFW firewall |
+| `scripts/04_setup_tailscale.sh` | root | Install Tailscale (prompts for auth key once) |
+| `scripts/05_setup_onewire.sh` | root | Enable DS18B20 1-wire hardware (dtoverlay + modprobe) |
+| `scripts/06_setup_app.sh` | root → argus | Clone repo as argus, install uv, sync deps, register sensors |
+| `scripts/07_deploy_service.sh` | root | Install and start the ice-gateway systemd service |
+
+> **Tailscale auth key** — before running setup, generate a one-time key at
 > https://login.tailscale.com/admin/settings/keys (Reusable: No, Ephemeral: No).
-> The script will prompt for it; it is never stored by the setup scripts.
+> Script 04 will prompt for it interactively; it is never stored by the setup scripts.
+
+## Service account
+
+The application runs as `argus` — a dedicated system account that owns all app files.
+
+| Property | Value |
+|---|---|
+| Username | `argus` |
+| Password | `scotsman` (change for production) |
+| Home | `/home/argus/` |
+| App | `/home/argus/ice_gateway/` |
 
 ## Post-deploy configuration
 
 1. Cable the KSBU-N to `eth0` and reboot the Pi.
-2. Discover the KSBU-N's assigned IP: `arp -n | grep eth0`
-3. Edit `/opt/ice_gateway/config/config.local.toml`:
+2. Discover the KSBU-N's assigned IP: `arp -n`
+3. Edit `/home/argus/ice_gateway/config/config.local.toml`:
    - Set `ksbu_device_ip` to the discovered address
-   - Add DS18B20 sensor ROM IDs and your site name
-   - Discover ROM IDs with: `ls /sys/bus/w1/devices/`
-4. Edit `/etc/ice-gateway/ice-gateway.env` — add any secrets
+   - Set `site_name` and `machine_name`
+   - Update sensor `name` and `location` entries
+4. Edit `/home/argus/ice_gateway/config/ice-gateway.env` — add any secrets
 5. `sudo systemctl restart ice-gateway`
+
+## Day-to-day deployment
+
+Pull the latest code and restart the service:
+
+```bash
+./deploy.sh
+```
+
+`deploy.sh` is self-correcting — it re-execs as `argus` automatically even if called as `conrad` or `root`, so ownership is never accidentally changed.
 
 ## Monitoring and diagnostics
 
@@ -59,7 +88,7 @@ ls /sys/bus/w1/devices/
 curl http://localhost:8080/api/health
 ```
 
-Application logs are written to `/opt/ice_gateway/logs/`:
+Application logs are written to `/home/argus/ice_gateway/logs/`:
 
 | File | Contents |
 |---|---|
@@ -78,7 +107,7 @@ poll_interval_seconds = 30
 
 [network]
 ksbu_gateway_ip = "192.168.50.1"   # Pi's own IP on the private link
-ksbu_device_ip  = "192.168.50.100" # KSBU-N (discover via arp)
+ksbu_device_ip  = "192.168.50.100" # KSBU-N (discover via arp after cabling)
 
 [logging]
 level = "INFO"
@@ -102,7 +131,7 @@ alert_max_f = 45.0
 Requires Python ≥ 3.13 and [uv](https://docs.astral.sh/uv/).
 
 ```bash
-uv sync --all-extras
+uv sync
 uv run pytest
 uv run ruff check src tests
 uv run mypy src
@@ -112,11 +141,14 @@ uv run mypy src
 
 | Script | Purpose |
 |---|---|
-| `00_README.sh` | Print this setup guide in the terminal |
-| `01_setup_os.sh` | OS updates and base package install |
-| `02_setup_network.sh` | Static IP, DHCP server, UFW firewall |
-| `03_setup_tailscale.sh` | Tailscale VPN install and auth |
-| `04_setup_onewire.sh` | 1-Wire kernel module and overlay |
-| `05_setup_python.sh` | Install uv and sync dependencies |
-| `06_deploy_app.sh` | Copy app to `/opt`, install systemd service |
-| `07_status_report.sh` | Service status, logs, sensors, system health |
+| `setup.sh` | Orchestrator — bare-Pi provisioning in one command |
+| `deploy.sh` | Day-to-day update — git pull + uv sync + service restart (self-correcting) |
+| `scripts/00_README.sh` | Print setup guide in the terminal |
+| `scripts/01_setup_os.sh` | OS updates and base package install |
+| `scripts/02_create_argus.sh` | Create `argus` service user with groups and sudoers |
+| `scripts/03_setup_network.sh` | Static IP, DHCP server, UFW firewall |
+| `scripts/04_setup_tailscale.sh` | Tailscale VPN install and auth (idempotent) |
+| `scripts/05_setup_onewire.sh` | 1-Wire kernel module and boot overlay (hardware only) |
+| `scripts/06_setup_app.sh` | Clone repo as argus, install uv, sync deps, register sensors |
+| `scripts/07_deploy_service.sh` | Install systemd service, enable, restart |
+| `scripts/07_status_report.sh` | Service status, logs, sensors, system health |
