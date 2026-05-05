@@ -1,16 +1,17 @@
 [Unit]
 Description=Ice Gateway Monitor
-Documentation=https://github.com/your-repo/scotsman-monitor
+Documentation=https://github.com/conradstorz/Scotsman_Monitor
 After=network-online.target
 Wants=network-online.target
 
 [Service]
 Type=simple
-User=pi
-WorkingDirectory=/opt/ice_gateway
-EnvironmentFile=/etc/ice-gateway/ice-gateway.env
-Environment="PATH=/home/pi/.local/bin:/usr/local/bin:/usr/bin:/bin"
-ExecStart=uv run ice-gateway
+User=argus
+Group=argus
+WorkingDirectory=/home/argus/ice_gateway
+EnvironmentFile=/home/argus/ice_gateway/config/ice-gateway.env
+Environment="PATH=/home/argus/.local/bin:/usr/local/bin:/usr/bin:/bin"
+ExecStart=/home/argus/ice_gateway/.venv/bin/ice-gateway
 Restart=always
 RestartSec=10
 StandardOutput=journal
