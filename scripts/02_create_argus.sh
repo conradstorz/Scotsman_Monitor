@@ -10,8 +10,7 @@ else
     useradd --create-home --shell /bin/bash \
         --comment "Ice Gateway service account" argus
     passwd --lock argus
-    echo "Created argus user with locked password (no login)"
-
+    echo "Created argus user with locked password (no login — uses sudoers only)"
 fi
 
 # Add to required groups (warn if group missing — may need hardware packages)
