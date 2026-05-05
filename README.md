@@ -36,8 +36,40 @@ sudo bash setup.sh
 | `scripts/07_deploy_service.sh` | root | Install and start the ice-gateway systemd service |
 
 > **Tailscale auth key** — before running setup, generate a one-time key at
-> https://login.tailscale.com/admin/settings/keys (Reusable: No, Ephemeral: No).
-> Script 04 will prompt for it interactively; it is never stored by the setup scripts.
+> https://login.tailscale.com/admin/settings/keys with these settings:
+>
+> | Setting | Value | Reason |
+> |---|---|---|
+> | Reusable | No | Key is consumed on first use and cannot enroll a second device |
+> | Expiry | 90 days | Short enough to limit exposure if the key is intercepted |
+> | Ephemeral | No | Pi must persist in the tailnet across reboots and power cycles |
+>
+> Script 04 prompts for the key interactively (it starts with `tskey-auth-`).
+> The key is never written to disk by the setup scripts.
+>
+> **Re-running setup does not consume or invalidate the key.** Script 04 checks
+> `tailscale status` first — if the Pi is already enrolled in a tailnet it skips
+> the auth step entirely. Your existing tailnet node and its stable Tailscale IP
+> are preserved across re-installs.
+
+## Moving to a different Tailscale network
+
+If the Pi needs to be re-assigned to a different tailnet (e.g. moved to a new
+site or transferred to a new owner):
+
+```bash
+# 1. Disconnect from the current tailnet (removes the Pi from that network)
+tailscale logout
+
+# 2. Re-run the Tailscale script — it will detect the disconnected state
+#    and prompt for a new auth key from the new tailnet
+sudo bash scripts/04_setup_tailscale.sh
+```
+
+`tailscale logout` removes the Pi's node from the old tailnet immediately.
+The old auth key has already been consumed and cannot be reused — only the
+node identity is removed. Generate a new auth key from the target tailnet's
+admin console before running step 2.
 
 ## Service account
 
