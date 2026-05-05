@@ -9,9 +9,12 @@ if id "argus" &>/dev/null; then
 else
     useradd --create-home --shell /bin/bash \
         --comment "Ice Gateway service account" argus
-    passwd --lock argus
-    echo "Created argus user with locked password (no login — uses sudoers only)"
+    echo "Created argus user"
 fi
+
+# Always ensure account is locked — idempotent on re-runs
+passwd --lock argus
+echo "argus account locked (no login — uses sudoers only)"
 
 # Add to required groups (warn if group missing — may need hardware packages)
 for group in gpio i2c dialout; do
