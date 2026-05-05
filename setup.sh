@@ -8,13 +8,16 @@ fi
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-# Detect the repo URL from the git remote — works for any fork
+# Detect the repo URL from the git remote — works for any fork.
+# Convert SSH remotes (git@github.com:user/repo.git) to HTTPS so argus
+# can clone without needing an SSH key on the Pi.
 REPO_URL="$(git -C "$SCRIPT_DIR" remote get-url origin 2>/dev/null || echo '')"
 if [ -z "$REPO_URL" ]; then
     echo "ERROR: Could not read git remote URL." >&2
     echo "Make sure you cloned the repo before running setup.sh." >&2
     exit 1
 fi
+REPO_URL="$(echo "$REPO_URL" | sed 's|git@\([^:]*\):|https://\1/|')"
 
 echo "=== Ice Gateway Setup ==="
 echo "Repo: $REPO_URL"
