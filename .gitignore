@@ -13,11 +13,13 @@ build/
 # Project runtime — keep directory, ignore contents
 data/*.sqlite
 data/raw_ksbu/
+data/ksbun_*
 logs/*.log
 logs/*.gz
 
 # Machine config and secrets
 config/config.local.toml
+config/ice-gateway.env
 .env
 
 # OS
