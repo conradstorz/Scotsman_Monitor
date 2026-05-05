@@ -4,7 +4,8 @@ set -euo pipefail
 echo "=== Step 1: OS Setup ==="
 apt-get update
 apt-get upgrade -y
-apt-get install -y git sqlite3 i2c-tools chrony ufw openssh-server
+apt-get install -y git sqlite3 i2c-tools chrony ufw openssh-server \
+    curl snmp tftpd-hpa
 
 timedatectl set-timezone UTC
 
