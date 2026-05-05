@@ -6,12 +6,22 @@ echo "=== Step 6: App Install ==="
 REPO_URL="${1:?ERROR: pass repo URL as first argument (called automatically by setup.sh)}"
 APP_DIR="/home/argus/ice_gateway"
 
-# Clone if not already present
+# Clone as root so the working tree is fully checked out, then fix ownership.
+# Running git clone as argus via sudo can silently produce an incomplete
+# working tree depending on argus's git configuration.
 if [ -d "$APP_DIR/.git" ]; then
     echo "App directory already exists — skipping clone"
 else
-    sudo -u argus git clone "$REPO_URL" "$APP_DIR"
+    git clone "$REPO_URL" "$APP_DIR"
+    chown -R argus:argus "$APP_DIR"
     echo "Cloned $REPO_URL → $APP_DIR"
+fi
+
+# Verify the working tree is complete
+if [ ! -f "$APP_DIR/pyproject.toml" ]; then
+    echo "ERROR: pyproject.toml missing from clone — clone may be incomplete" >&2
+    ls -la "$APP_DIR/" >&2
+    exit 1
 fi
 
 # Install uv for argus if not present
@@ -21,20 +31,6 @@ else
     sudo -u argus bash -c 'curl -LsSf https://astral.sh/uv/install.sh | sh'
     echo "Installed uv for argus"
 fi
-
-# Diagnostics — confirm pyproject.toml is present and visible before syncing
-echo "  Clone check (root):"
-if [ -f "$APP_DIR/pyproject.toml" ]; then
-    echo "    pyproject.toml : FOUND"
-else
-    echo "    pyproject.toml : MISSING — listing $APP_DIR:" >&2
-    ls -la "$APP_DIR/" >&2
-    exit 1
-fi
-echo "  argus CWD (no subshell) : $(sudo -u argus bash -c 'pwd')"
-echo "  argus file test         : $(sudo -u argus bash -c "ls '$APP_DIR/pyproject.toml' 2>&1 || echo CANNOT READ")"
-(cd "$APP_DIR" && echo "  subshell root CWD       : $(pwd)")
-(cd "$APP_DIR" && echo "  subshell argus CWD      : $(sudo -u argus bash -c 'pwd')")
 
 # Install Python dependencies (no dev tools on the Pi)
 (cd "$APP_DIR" && sudo -u argus /home/argus/.local/bin/uv sync --no-dev)
