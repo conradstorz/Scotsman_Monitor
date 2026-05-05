@@ -7,20 +7,31 @@ REPO_URL="${1:?ERROR: pass repo URL as first argument (called automatically by s
 APP_DIR="/home/argus/ice_gateway"
 
 # Clone as root so the working tree is fully checked out, then fix ownership.
-# Running git clone as argus via sudo can silently produce an incomplete
-# working tree depending on argus's git configuration.
 if [ -d "$APP_DIR/.git" ]; then
     echo "App directory already exists — skipping clone"
 else
     git clone "$REPO_URL" "$APP_DIR"
-    chown -R argus:argus "$APP_DIR"
     echo "Cloned $REPO_URL → $APP_DIR"
+
+    INDEX_COUNT=$(git -C "$APP_DIR" ls-files | wc -l)
+    TREE_COUNT=$(find "$APP_DIR" -not -path '*/.git/*' -type f | wc -l)
+    echo "  Index: $INDEX_COUNT files  |  Working tree: $TREE_COUNT files"
+
+    if [ "$TREE_COUNT" -lt "$INDEX_COUNT" ]; then
+        echo "  Working tree is incomplete — forcing checkout..."
+        git -C "$APP_DIR" checkout HEAD -- . 2>&1
+        TREE_COUNT2=$(find "$APP_DIR" -not -path '*/.git/*' -type f | wc -l)
+        echo "  After forced checkout: $TREE_COUNT2 files"
+    fi
+
+    chown -R argus:argus "$APP_DIR"
 fi
 
 # Verify the working tree is complete
 if [ ! -f "$APP_DIR/pyproject.toml" ]; then
-    echo "ERROR: pyproject.toml missing from clone — clone may be incomplete" >&2
+    echo "ERROR: pyproject.toml missing — listing $APP_DIR:" >&2
     ls -la "$APP_DIR/" >&2
+    git -C "$APP_DIR" status --short 2>&1 | head -10 >&2
     exit 1
 fi
 
