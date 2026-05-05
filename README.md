@@ -173,6 +173,7 @@ uv run mypy src
 
 | Script | Purpose |
 |---|---|
+| `bootstrap.sh` | Curl-able entry point — installs git if missing, clones repo, runs `setup.sh` |
 | `setup.sh` | Orchestrator — bare-Pi provisioning in one command |
 | `deploy.sh` | Day-to-day update — git pull + uv sync + service restart (self-correcting) |
 | `scripts/00_README.sh` | Print setup guide in the terminal |

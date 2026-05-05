@@ -89,7 +89,7 @@ echo "Checking repository files..."
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
 
-for f in setup.sh deploy.sh; do
+for f in bootstrap.sh setup.sh deploy.sh; do
     if [ -f "$PROJECT_DIR/$f" ]; then
         echo "  OK  $f"
     else
