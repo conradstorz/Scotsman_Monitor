@@ -78,7 +78,7 @@ The application runs as `argus` — a dedicated system account that owns all app
 | Property | Value |
 |---|---|
 | Username | `argus` |
-| Password | `scotsman` (change for production) |
+| Password | locked (`passwd --lock` — no login; access via sudoers only) |
 | Home | `/home/argus/` |
 | App | `/home/argus/ice_gateway/` |
 

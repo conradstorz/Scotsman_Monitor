@@ -783,7 +783,7 @@ setup.sh calls these scripts in order (all run as root):
 --- Service account ---
 
   User:     argus
-  Password: scotsman  (change this for production)
+  Password: locked (no login — access via sudoers only)
   Home:     /home/argus/
   App:      /home/argus/ice_gateway/
 

@@ -21,7 +21,7 @@ archetype of the tireless watcher.
 | Property | Value |
 |----------|-------|
 | Username | `argus` |
-| Password | `scotsman` (hardcoded for now; a future iteration will accept it as a prompt or env var at setup time) |
+| Password | locked (`passwd --lock` — no login; access via sudoers only) |
 | Home | `/home/argus` |
 | Shell | `/bin/bash` |
 | Groups | `gpio`, `i2c`, `dialout` |
@@ -230,7 +230,7 @@ systemctl status ice-gateway --no-pager
 
 ### `02_create_argus.sh` (new)
 - `useradd` with home, shell, groups
-- `chpasswd` to set `scotsman`
+- `passwd --lock argus` (locked account — no login password)
 - Write `/etc/sudoers.d/ice-gateway`
 
 ### `03_setup_network.sh` (was `02`)
