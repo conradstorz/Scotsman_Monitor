@@ -16,6 +16,20 @@ Script 04 will prompt for a Tailscale auth key. Get one first:
   4. Copy the key (starts with tskey-auth-...).
      Script 04 will prompt for it interactively and does not store it.
 
+  Re-running setup.sh does NOT consume or invalidate the key. Script 04
+  checks 'tailscale status' first — if already enrolled it skips the auth
+  step entirely. Your existing tailnet node and Tailscale IP are preserved.
+
+--- Moving to a different Tailscale network ---
+
+  If the Pi needs to be re-assigned to a different tailnet:
+
+    tailscale logout                        # removes Pi from current tailnet
+    sudo bash scripts/04_setup_tailscale.sh # prompts for new auth key
+
+  Generate the new key from the target tailnet's admin console first.
+  The old auth key was already consumed on first use and cannot be reused.
+
 --- Bootstrap (run on a fresh Raspberry Pi OS 64-bit install) ---
 
   git clone https://github.com/<YOUR_GITHUB_USERNAME>/Scotsman_Monitor
