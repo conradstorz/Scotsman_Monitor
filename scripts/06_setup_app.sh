@@ -23,7 +23,8 @@ else
 fi
 
 # Install Python dependencies (no dev tools on the Pi)
-sudo -u argus /home/argus/.local/bin/uv --directory "$APP_DIR" sync --no-dev
+# cd as root in a subshell; sudo preserves CWD so uv finds pyproject.toml.
+(cd "$APP_DIR" && sudo -u argus /home/argus/.local/bin/uv sync --no-dev)
 echo "uv sync complete"
 
 # Create config.local.toml if missing
