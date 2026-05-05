@@ -1,7 +1,7 @@
 #!/bin/bash
 set -euo pipefail
 
-echo "=== Step 2: Network Setup ==="
+echo "=== Step 3: Network Setup ==="
 
 # The Pi is the DHCP server on eth0. The KSBU-N connects to eth0 and
 # receives an address in 192.168.50.100-200. After first boot, discover

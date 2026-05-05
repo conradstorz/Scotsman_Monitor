@@ -28,9 +28,11 @@ systemctl enable ice-gateway
 
 # Watchdog checker is oneshot — starting it now runs the check immediately.
 systemctl restart ice-gateway-watchdog
-systemctl restart ice-gateway
+
+# Don't start ice-gateway yet: config.local.toml must be edited first.
+# setup.sh prints the next-steps instructions.
 
 echo ""
 echo "=== Services deployed ==="
-systemctl status ice-gateway-watchdog --no-pager --lines=0
-systemctl status ice-gateway --no-pager
+systemctl status ice-gateway-watchdog --no-pager --lines=0 || true
+systemctl status ice-gateway --no-pager || true

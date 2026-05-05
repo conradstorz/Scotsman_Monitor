@@ -28,10 +28,19 @@ done
 SUDOERS_FILE="/etc/sudoers.d/ice-gateway"
 SYSTEMCTL="$(command -v systemctl)"
 
+# Determine which user invoked sudo so the deploy rule isn't hardcoded.
+DEPLOY_USER="${SUDO_USER:-}"
+if [ -n "$DEPLOY_USER" ]; then
+    DEPLOY_RULE="${DEPLOY_USER} ALL=(argus) NOPASSWD: /home/argus/ice_gateway/deploy.sh"
+    echo "  Personal deploy rule: $DEPLOY_USER can invoke deploy.sh as argus"
+else
+    DEPLOY_RULE="# No invoking user detected — add manually: <user> ALL=(argus) NOPASSWD: /home/argus/ice_gateway/deploy.sh"
+    echo "  WARNING: SUDO_USER not set — personal deploy rule skipped; add manually to $SUDOERS_FILE"
+fi
+
 cat > "$SUDOERS_FILE" << EOF
 # Ice Gateway — written by 02_create_argus.sh — do not edit manually
-# conrad can invoke the argus deploy script without a password
-conrad ALL=(argus) NOPASSWD: /home/argus/ice_gateway/deploy.sh
+$DEPLOY_RULE
 
 # argus can manage the ice-gateway service
 argus ALL=(root) NOPASSWD: $SYSTEMCTL start ice-gateway
