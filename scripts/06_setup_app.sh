@@ -22,8 +22,21 @@ else
     echo "Installed uv for argus"
 fi
 
+# Diagnostics — confirm pyproject.toml is present and visible before syncing
+echo "  Clone check (root):"
+if [ -f "$APP_DIR/pyproject.toml" ]; then
+    echo "    pyproject.toml : FOUND"
+else
+    echo "    pyproject.toml : MISSING — listing $APP_DIR:" >&2
+    ls -la "$APP_DIR/" >&2
+    exit 1
+fi
+echo "  argus CWD (no subshell) : $(sudo -u argus bash -c 'pwd')"
+echo "  argus file test         : $(sudo -u argus bash -c "ls '$APP_DIR/pyproject.toml' 2>&1 || echo CANNOT READ")"
+(cd "$APP_DIR" && echo "  subshell root CWD       : $(pwd)")
+(cd "$APP_DIR" && echo "  subshell argus CWD      : $(sudo -u argus bash -c 'pwd')")
+
 # Install Python dependencies (no dev tools on the Pi)
-# cd as root in a subshell; sudo preserves CWD so uv finds pyproject.toml.
 (cd "$APP_DIR" && sudo -u argus /home/argus/.local/bin/uv sync --no-dev)
 echo "uv sync complete"
 
