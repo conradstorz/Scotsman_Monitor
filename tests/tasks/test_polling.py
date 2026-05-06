@@ -76,3 +76,42 @@ def test_poll_once_multiple_readings(
         rows = session.execute(select(SensorReadingRow)).scalars().all()
     assert len(rows) == 2
     assert {r.sensor_id for r in rows} == {"28-aaa", "28-bbb"}
+
+
+async def test_polling_loop_continues_after_exception(
+    config, db_engine, fake_sensor_bus
+):
+    call_count = 0
+    good_health = PiHealth(
+        cpu_temp_c=50.0,
+        cpu_percent=10.0,
+        memory_percent=40.0,
+        disk_percent=20.0,
+        timestamp=datetime(2024, 1, 1, tzinfo=UTC),
+    )
+
+    class RaisingThenOkProvider(PiHealthProvider):
+        def read(self) -> PiHealth:
+            nonlocal call_count
+            call_count += 1
+            if call_count == 1:
+                raise RuntimeError("simulated crash")
+            return good_health
+
+    bus = fake_sensor_bus([])
+    provider = RaisingThenOkProvider()
+    sleep_calls = 0
+
+    async def fake_sleep(_seconds: float) -> None:
+        nonlocal sleep_calls
+        sleep_calls += 1
+        if sleep_calls >= 2:
+            raise asyncio.CancelledError()
+
+    with patch("asyncio.sleep", new=fake_sleep):
+        with pytest.raises(asyncio.CancelledError):
+            await polling_loop(config, db_engine, bus, provider)
+
+    with Session(db_engine) as session:
+        rows = session.execute(select(PiHealthRow)).scalars().all()
+    assert len(rows) == 1
