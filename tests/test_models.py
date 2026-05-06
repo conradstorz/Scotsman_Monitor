@@ -1,12 +1,14 @@
+from datetime import UTC, datetime
+
 import pytest
-from datetime import datetime, timezone
 from pydantic import ValidationError
-from ice_gateway.models import SensorConfig, SensorReading, PiHealth
+
 from ice_gateway.constants import ReadQuality
+from ice_gateway.models import PiHealth, SensorConfig, SensorReading
 
 
 def _now() -> datetime:
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)
 
 
 class TestSensorConfig:
