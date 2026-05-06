@@ -6,12 +6,43 @@ echo "=== Step 1: OS Setup ==="
 apt-get update
 apt-get upgrade -y
 apt-get install -y git sqlite3 i2c-tools chrony ufw openssh-server \
-    curl snmp tftpd-hpa unattended-upgrades
+    curl unattended-upgrades
+
+# Purge unneeded network listeners if present from prior runs (idempotent)
+apt-get purge -y --auto-remove snmp tftpd-hpa 2>/dev/null || true
 
 timedatectl set-timezone UTC
 
 systemctl enable ssh
 systemctl start ssh
+
+# Regenerate SSH host keys — Pi OS images ship with shared keys.
+# Marker file prevents rotation on re-runs (which would break known_hosts).
+HOSTKEY_MARKER="/etc/ssh/.host-keys-regenerated"
+if [ ! -f "$HOSTKEY_MARKER" ]; then
+    rm -f /etc/ssh/ssh_host_*
+    dpkg-reconfigure openssh-server
+    touch "$HOSTKEY_MARKER"
+    echo "SSH host keys regenerated"
+else
+    echo "SSH host keys already regenerated — skipping"
+fi
+
+# Write sshd hardening config — drop-in avoids editing sshd_config directly.
+# Idempotent: overwriting the file with the same content is safe.
+cat > /etc/ssh/sshd_config.d/99-ice-gateway-hardening.conf << 'EOF'
+# Ice Gateway SSH hardening — written by 01_setup_os.sh — do not edit manually
+PasswordAuthentication no
+PermitRootLogin no
+X11Forwarding no
+AllowAgentForwarding no
+MaxAuthTries 3
+LoginGraceTime 20
+EOF
+chmod 644 /etc/ssh/sshd_config.d/99-ice-gateway-hardening.conf
+sshd -t   # validate combined config — fails fast before restarting
+systemctl restart ssh
+echo "sshd hardening applied and service restarted"
 
 systemctl enable chrony
 systemctl start chrony
