@@ -59,8 +59,15 @@ fi
 ufw --force reset
 ufw default deny incoming
 ufw default allow outgoing
+
+# SSH stays open on all interfaces here — locked to tailscale0+eth0 in 04_setup_tailscale.sh
+# after Tailscale is confirmed connected (locking before that risks an SSH lockout).
 ufw allow ssh
-ufw allow 8080/tcp comment 'Ice Gateway Dashboard'
+
+# Dashboard: LAN (eth0) and Tailscale only — never exposed on wlan0
+ufw allow in on eth0 to any port 8080 proto tcp comment 'Ice Gateway Dashboard (LAN)'
+ufw allow in on tailscale0 to any port 8080 proto tcp comment 'Ice Gateway Dashboard (Tailscale)'
+
 ufw --force enable
 
 echo "=== Network setup complete ==="
