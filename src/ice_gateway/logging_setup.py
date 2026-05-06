@@ -26,7 +26,7 @@ def configure_logging(level: str = "INFO", retain_days: int = 365) -> None:
     logger.add(
         LOGS_DIR / "ice_gateway.log",
         level=level,
-        rotation="1 day",
+        rotation="500 MB",
         retention=f"{retain_days} days",
         compression="gz",
         format=_FILE_FORMAT,
@@ -35,7 +35,7 @@ def configure_logging(level: str = "INFO", retain_days: int = 365) -> None:
     logger.add(
         LOGS_DIR / "sensors.log",
         level=level,
-        rotation="1 day",
+        rotation="500 MB",
         retention=f"{retain_days} days",
         compression="gz",
         format=_FILE_FORMAT,
