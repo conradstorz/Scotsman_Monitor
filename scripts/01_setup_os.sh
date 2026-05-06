@@ -8,6 +8,7 @@ apt-get upgrade -y
 apt-get install -y git sqlite3 i2c-tools chrony ufw openssh-server \
     curl unattended-upgrades
 
+echo "Purging unneeded network listeners (snmp, tftpd-hpa)..."
 # Purge unneeded network listeners if present from prior runs (idempotent)
 apt-get purge -y --auto-remove snmp tftpd-hpa 2>/dev/null || true
 
@@ -21,12 +22,16 @@ systemctl start ssh
 HOSTKEY_MARKER="/etc/ssh/.host-keys-regenerated"
 if [ ! -f "$HOSTKEY_MARKER" ]; then
     rm -f /etc/ssh/ssh_host_*
-    dpkg-reconfigure openssh-server
+    DEBIAN_FRONTEND=noninteractive dpkg-reconfigure openssh-server
     touch "$HOSTKEY_MARKER"
     echo "SSH host keys regenerated"
 else
     echo "SSH host keys already regenerated — skipping"
 fi
+
+# PREREQUISITE: SSH public key auth must already be working for the connecting user
+# before this block runs. PasswordAuthentication no will lock out password-only access
+# the moment sshd restarts. Verify with: ssh-copy-id user@pi before running setup.
 
 # Write sshd hardening config — drop-in avoids editing sshd_config directly.
 # Idempotent: overwriting the file with the same content is safe.
