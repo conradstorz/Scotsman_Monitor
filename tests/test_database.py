@@ -65,3 +65,21 @@ def test_sensor_reading_allows_null_temperature(db_engine):
         result = session.execute(select(SensorReadingRow)).scalar_one()
         assert result.temperature_c is None
         assert result.error_message == "Device not found"
+
+
+def test_timestamp_preserves_timezone(db_engine):
+    ts = datetime(2024, 6, 15, 12, 0, 0, tzinfo=UTC)
+    with Session(db_engine) as session:
+        session.add(
+            SensorReadingRow(
+                timestamp=ts,
+                sensor_id="28-tz-test",
+                sensor_name="tz_sensor",
+                temperature_c=5.0,
+                temperature_f=41.0,
+                read_quality=ReadQuality.OK.value,
+            )
+        )
+        session.commit()
+        result = session.execute(select(SensorReadingRow)).scalar_one()
+        assert result.timestamp.tzinfo is not None
