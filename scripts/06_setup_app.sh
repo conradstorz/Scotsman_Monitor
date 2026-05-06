@@ -28,12 +28,33 @@ if [ ! -f "$APP_DIR/pyproject.toml" ]; then
     exit 1
 fi
 
-# Install uv for argus if not present
+# Install uv for argus if not present — pinned binary from GitHub releases with SHA256 verify.
+# To update: change UV_VERSION. The .sha256 file is fetched from the same GitHub release.
+# Release page: https://github.com/astral-sh/uv/releases
+UV_VERSION="0.7.3"
+UV_ARCH="aarch64-unknown-linux-musl"
+UV_TARBALL="uv-${UV_ARCH}.tar.gz"
+UV_RELEASE_BASE="https://github.com/astral-sh/uv/releases/download/${UV_VERSION}"
+
 if [ -f "/home/argus/.local/bin/uv" ]; then
     echo "uv already installed for argus — skipping"
 else
-    sudo -u argus bash -c 'curl -LsSf https://astral.sh/uv/install.sh | sh'
-    echo "Installed uv for argus"
+    TMPDIR_UV="$(mktemp -d)"
+    trap 'rm -rf "$TMPDIR_UV"' EXIT
+
+    echo "Downloading uv ${UV_VERSION} for ${UV_ARCH}..."
+    curl -LsSf "${UV_RELEASE_BASE}/${UV_TARBALL}" -o "${TMPDIR_UV}/${UV_TARBALL}"
+    curl -LsSf "${UV_RELEASE_BASE}/${UV_TARBALL}.sha256" -o "${TMPDIR_UV}/${UV_TARBALL}.sha256"
+
+    # Verify integrity — exits non-zero and aborts (set -e) if mismatch
+    (cd "${TMPDIR_UV}" && sha256sum -c "${UV_TARBALL}.sha256")
+
+    tar -xzf "${TMPDIR_UV}/${UV_TARBALL}" -C "${TMPDIR_UV}"
+    sudo -u argus mkdir -p /home/argus/.local/bin
+    install -o argus -g argus -m 755 "${TMPDIR_UV}/uv"  /home/argus/.local/bin/uv
+    install -o argus -g argus -m 755 "${TMPDIR_UV}/uvx" /home/argus/.local/bin/uvx
+
+    echo "uv ${UV_VERSION} installed for argus"
 fi
 
 # Install Python dependencies (no dev tools on the Pi)
@@ -53,7 +74,8 @@ fi
 if [ ! -f "$APP_DIR/config/ice-gateway.env" ]; then
     sudo -u argus cp "$APP_DIR/.env.example" \
         "$APP_DIR/config/ice-gateway.env"
-    echo "Created ice-gateway.env — edit $APP_DIR/config/ice-gateway.env to add secrets"
+    chmod 600 "$APP_DIR/config/ice-gateway.env"
+    echo "Created ice-gateway.env (mode 600) — edit $APP_DIR/config/ice-gateway.env to add secrets"
 else
     echo "ice-gateway.env already exists — skipping"
 fi
