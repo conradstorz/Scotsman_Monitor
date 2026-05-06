@@ -32,6 +32,16 @@ systemctl restart ice-gateway-watchdog
 # Don't start ice-gateway yet: config.local.toml must be edited first.
 # setup.sh prints the next-steps instructions.
 
+# Install root-owned deploy script — sudoers rule points here (not the in-repo copy).
+# argus cannot modify /usr/local/sbin, so this prevents privilege escalation via
+# sudo + writable script.
+DEPLOY_TARGET="/usr/local/sbin/ice-gateway-deploy"
+cp "$APP_DIR/deploy.sh" "$DEPLOY_TARGET"
+chown root:root "$DEPLOY_TARGET"
+chmod 755 "$DEPLOY_TARGET"
+echo "Deploy script installed at $DEPLOY_TARGET (root-owned)"
+echo "NOTE: re-run this step after any changes to deploy.sh"
+
 echo ""
 echo "=== Services deployed ==="
 systemctl status ice-gateway-watchdog --no-pager --lines=0 || true
