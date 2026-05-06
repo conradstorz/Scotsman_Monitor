@@ -1,4 +1,5 @@
 from pathlib import Path
+from unittest.mock import patch
 
 import pytest
 
@@ -84,3 +85,23 @@ class TestOneWireSensorBusReader:
         assert len(readings) == 2
         assert readings[0].temperature_c == pytest.approx(1.0)
         assert readings[1].temperature_c == pytest.approx(2.0)
+
+    def test_bus_fault_on_read_oserror(self, tmp_path):
+        _write_sensor_file(tmp_path, "28-abc123", "some content")
+        reader = _make_reader(tmp_path)
+        with patch("pathlib.Path.read_text", side_effect=OSError("bus glitch")):
+            readings = reader.read_all([_sensor()])
+        assert readings[0].read_quality == ReadQuality.BUS_FAULT
+        assert readings[0].temperature_c is None
+        assert "bus glitch" in (readings[0].error_message or "")
+
+    def test_parse_failure_returns_bus_fault(self, tmp_path):
+        _write_sensor_file(
+            tmp_path,
+            "28-abc123",
+            "xx : crc=xx YES\nno_t_token_here\n",
+        )
+        reader = _make_reader(tmp_path)
+        readings = reader.read_all([_sensor()])
+        assert readings[0].read_quality == ReadQuality.BUS_FAULT
+        assert readings[0].temperature_c is None
