@@ -39,7 +39,7 @@ Script 04 will prompt for a Tailscale auth key. Get one first:
 
 setup.sh calls these scripts in order (all run as root):
 
-  scripts/01_setup_os.sh        Update OS, install base packages (snmp, tftpd-hpa, etc.)
+  scripts/01_setup_os.sh        Update OS, install base packages, harden SSH
   scripts/02_create_argus.sh    Create 'argus' service user, set groups, write sudoers
   scripts/03_setup_network.sh   Static IP + DHCP server on eth0, UFW firewall
   scripts/04_setup_tailscale.sh Install Tailscale (prompts for auth key once)
