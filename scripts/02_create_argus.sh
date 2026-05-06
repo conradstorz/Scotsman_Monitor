@@ -33,10 +33,10 @@ SYSTEMCTL="$(command -v systemctl)"
 # Determine which user invoked sudo so the deploy rule isn't hardcoded.
 DEPLOY_USER="${SUDO_USER:-}"
 if [ -n "$DEPLOY_USER" ]; then
-    DEPLOY_RULE="${DEPLOY_USER} ALL=(argus) NOPASSWD: /home/argus/ice_gateway/deploy.sh"
-    echo "  Personal deploy rule: $DEPLOY_USER can invoke deploy.sh as argus"
+    DEPLOY_RULE="${DEPLOY_USER} ALL=(root) NOPASSWD: /usr/local/sbin/ice-gateway-deploy"
+    echo "  Personal deploy rule: $DEPLOY_USER can invoke ice-gateway-deploy as root"
 else
-    DEPLOY_RULE="# No invoking user detected — add manually: <user> ALL=(argus) NOPASSWD: /home/argus/ice_gateway/deploy.sh"
+    DEPLOY_RULE="# No invoking user detected — add manually: <user> ALL=(root) NOPASSWD: /usr/local/sbin/ice-gateway-deploy"
     echo "  WARNING: SUDO_USER not set — personal deploy rule skipped; add manually to $SUDOERS_FILE"
 fi
 
