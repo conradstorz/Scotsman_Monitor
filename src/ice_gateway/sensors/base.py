@@ -16,13 +16,13 @@ class PiHealthProvider(ABC):
         ...
 
 
-class UPSStatusProvider(ABC):
+class UPSStatusProvider(ABC):  # noqa: B024 — Phase 2 stub, interface TBD
     pass
 
 
-class KSBUNTransport(ABC):
+class KSBUNTransport(ABC):  # noqa: B024 — Phase 2 stub, interface TBD
     pass
 
 
-class GPIOController(ABC):
+class GPIOController(ABC):  # noqa: B024 — Phase 2 stub, interface TBD
     pass
