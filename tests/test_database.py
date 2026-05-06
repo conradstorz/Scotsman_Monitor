@@ -83,3 +83,4 @@ def test_timestamp_preserves_timezone(db_engine):
         session.commit()
         result = session.execute(select(SensorReadingRow)).scalar_one()
         assert result.timestamp.tzinfo is not None
+        assert result.timestamp == ts
