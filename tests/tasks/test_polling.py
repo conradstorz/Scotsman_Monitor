@@ -35,7 +35,9 @@ def config(monkeypatch, tmp_path):
     return AppConfig()
 
 
-def test_poll_once_writes_sensor_reading(config, db_engine, fake_sensor_bus, fake_pi_health_provider):
+def test_poll_once_writes_sensor_reading(
+    config, db_engine, fake_sensor_bus, fake_pi_health_provider
+):
     reading = _make_reading()
     bus = fake_sensor_bus([reading])
 
@@ -49,7 +51,9 @@ def test_poll_once_writes_sensor_reading(config, db_engine, fake_sensor_bus, fak
     assert rows[0].read_quality == "ok"
 
 
-def test_poll_once_writes_pi_health(config, db_engine, fake_sensor_bus, fake_pi_health_provider):
+def test_poll_once_writes_pi_health(
+    config, db_engine, fake_sensor_bus, fake_pi_health_provider
+):
     bus = fake_sensor_bus([])
 
     _poll_once(config, db_engine, bus, fake_pi_health_provider)
@@ -60,7 +64,9 @@ def test_poll_once_writes_pi_health(config, db_engine, fake_sensor_bus, fake_pi_
     assert row.cpu_percent == 10.0
 
 
-def test_poll_once_multiple_readings(config, db_engine, fake_sensor_bus, fake_pi_health_provider):
+def test_poll_once_multiple_readings(
+    config, db_engine, fake_sensor_bus, fake_pi_health_provider
+):
     readings = [_make_reading("28-aaa"), _make_reading("28-bbb")]
     bus = fake_sensor_bus(readings)
 
