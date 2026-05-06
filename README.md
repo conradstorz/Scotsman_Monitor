@@ -85,6 +85,13 @@ curl -fsSL https://raw.githubusercontent.com/conradstorz/Scotsman_Monitor/master
 
 The bootstrap installs git if missing, clones the repo into `~/Scotsman_Monitor`, and runs `setup.sh` automatically.
 
+> **Troubleshooting — `Permission denied (publickey)` during bootstrap:**
+> If the repo already exists on the Pi and was previously cloned over SSH, `git pull` will fail because the Pi has no GitHub SSH key. Switch the remote to HTTPS, then re-run bootstrap:
+> ```bash
+> git -C ~/Scotsman_Monitor remote set-url origin https://github.com/conradstorz/Scotsman_Monitor.git
+> curl -fsSL https://raw.githubusercontent.com/conradstorz/Scotsman_Monitor/master/bootstrap.sh | sudo bash
+> ```
+
 `setup.sh` calls the numbered scripts in order and stops on any failure:
 
 | Script | Purpose |
