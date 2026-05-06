@@ -18,5 +18,21 @@ StandardOutput=journal
 StandardError=journal
 SyslogIdentifier=ice-gateway
 
+# Sandboxing — constrains blast radius if the process is compromised
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=read-only
+PrivateTmp=true
+PrivateDevices=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+RestrictNamespaces=true
+LockPersonality=true
+MemoryDenyWriteExecute=true
+# Allow writes only to the paths the app actually uses
+ReadWritePaths=/home/argus/ice_gateway/data /home/argus/ice_gateway/logs /run
+
 [Install]
 WantedBy=multi-user.target
