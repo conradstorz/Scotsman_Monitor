@@ -6,12 +6,14 @@ from sqlalchemy.orm import Session
 
 from ..config import AppConfig
 from ..database import PiHealthRow, SensorReadingRow
-from ..sensors.base import SensorBusReader
-from ..sensors.pi_health import read_pi_health
+from ..sensors.base import PiHealthProvider, SensorBusReader
 
 
 async def polling_loop(
-    config: AppConfig, engine: Engine, sensor_bus: SensorBusReader
+    config: AppConfig,
+    engine: Engine,
+    sensor_bus: SensorBusReader,
+    pi_health_provider: PiHealthProvider,
 ) -> None:
     logger.info(
         "Polling loop started — interval={interval}s, sensors={count}",
@@ -20,15 +22,20 @@ async def polling_loop(
     )
     while True:
         try:
-            _poll_once(config, engine, sensor_bus)
+            _poll_once(config, engine, sensor_bus, pi_health_provider)
         except Exception:
             logger.exception("Unexpected error in polling loop")
         await asyncio.sleep(config.poll_interval_seconds)
 
 
-def _poll_once(config: AppConfig, engine: Engine, sensor_bus: SensorBusReader) -> None:
+def _poll_once(
+    config: AppConfig,
+    engine: Engine,
+    sensor_bus: SensorBusReader,
+    pi_health_provider: PiHealthProvider,
+) -> None:
     readings = sensor_bus.read_all(config.temperature_sensors)
-    health = read_pi_health()
+    health = pi_health_provider.read()
 
     with Session(engine) as session:
         for r in readings:

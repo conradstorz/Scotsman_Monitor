@@ -9,6 +9,7 @@ from .dashboard.app import create_app
 from .database import create_db_engine, init_db
 from .logging_setup import configure_logging
 from .sensors.onewire import OneWireSensorBusReader
+from .sensors.pi_health import PsutilPiHealthProvider
 from .tasks.polling import polling_loop
 
 
@@ -26,6 +27,7 @@ def main() -> None:
 
 async def _run(config: AppConfig, engine: Engine) -> None:
     sensor_bus = OneWireSensorBusReader()
+    pi_health_provider = PsutilPiHealthProvider()
     app = create_app(engine)
 
     server = uvicorn.Server(
@@ -38,6 +40,6 @@ async def _run(config: AppConfig, engine: Engine) -> None:
     )
 
     await asyncio.gather(
-        polling_loop(config, engine, sensor_bus),
+        polling_loop(config, engine, sensor_bus, pi_health_provider),
         server.serve(),
     )
