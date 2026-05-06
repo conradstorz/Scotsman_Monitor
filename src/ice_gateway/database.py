@@ -61,8 +61,10 @@ def create_db_engine(db_path: Path = DB_PATH) -> Engine:
     return create_engine(f"sqlite:///{db_path}", echo=False)
 
 
-def init_db(engine: Engine) -> None:
+def init_db(engine: Engine, db_path: Path = DB_PATH) -> None:
     Base.metadata.create_all(engine)
+    if db_path.exists():
+        db_path.chmod(0o600)
 
 
 def get_session(engine: Engine) -> Session:

@@ -1,10 +1,12 @@
+import sys
 from datetime import UTC, datetime
 
-from sqlalchemy import select
+import pytest
+from sqlalchemy import create_engine, select
 from sqlalchemy.orm import Session
 
 from ice_gateway.constants import ReadQuality
-from ice_gateway.database import PiHealthRow, SensorReadingRow
+from ice_gateway.database import PiHealthRow, SensorReadingRow, init_db
 
 
 def _now() -> datetime:
@@ -84,3 +86,12 @@ def test_timestamp_preserves_timezone(db_engine):
         result = session.execute(select(SensorReadingRow)).scalar_one()
         assert result.timestamp.tzinfo is not None
         assert result.timestamp == ts
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="chmod semantics differ on Windows")
+def test_init_db_sets_db_file_to_mode_600(tmp_path):
+    db_file = tmp_path / "test.sqlite"
+    engine = create_engine(f"sqlite:///{db_file}")
+    init_db(engine, db_path=db_file)
+    mode = db_file.stat().st_mode & 0o777
+    assert mode == 0o600, f"Expected 0o600, got {oct(mode)}"
