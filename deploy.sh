@@ -1,8 +1,10 @@
 #!/bin/bash
 set -euo pipefail
 
-# Self-correcting: if not running as argus, re-exec as argus.
-# Use realpath so the absolute path survives being called from any directory.
+# Intended call chain:
+#   admin user → sudo /usr/local/sbin/ice-gateway-deploy (runs as root)
+#   → re-execs as argus (below) → git pull + uv sync + sudo systemctl restart
+# realpath prevents symlink attacks on $SELF. The sudoers rule is in /etc/sudoers.d/ice-gateway.
 SELF="$(realpath "$0")"
 if [ "$(whoami)" != "argus" ]; then
     exec sudo -u argus "$SELF" "$@"
